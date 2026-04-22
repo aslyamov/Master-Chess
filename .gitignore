@@ -1,0 +1,8 @@
+node_modules/
+dist/
+tsconfig.tsbuildinfo
+*.local
+.DS_Store
+# Full Stockfish binary (107 MB) — not used, app uses stockfish-18-lite.js
+public/stockfish.wasm
+public/stockfish.js

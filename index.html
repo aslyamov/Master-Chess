@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Master Chess Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#570df8" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body class="bg-base-300 h-dvh flex flex-col font-sans text-base-content overflow-hidden">
+
+  <!-- ===== NAVBAR ===== -->
+  <nav class="navbar bg-base-200 shadow-sm px-4 h-14 shrink-0">
+    <div class="flex-1 gap-2 items-center">
+      <span class="text-xl font-bold tracking-tight text-primary">♟ Master Chess</span>
+    </div>
+    <div class="flex-none gap-1">
+      <button id="nav-train" class="btn btn-sm btn-primary">Тренировка</button>
+      <button id="nav-stats" class="btn btn-sm btn-ghost">Статистика</button>
+    </div>
+  </nav>
+
+  <!-- ===== MAIN ===== -->
+  <main id="app" class="flex-1 flex flex-col items-center justify-center overflow-y-auto p-4 gap-6">
+
+    <!-- ── Upload screen ── -->
+    <section id="screen-upload" class="flex flex-col items-center gap-6 w-full max-w-lg">
+      <div class="text-center">
+        <h1 class="text-3xl font-bold mb-2">Угадай ход</h1>
+        <p class="text-base-content/60">Играй за гроссмейстера и сравнивай ходы с движком</p>
+      </div>
+
+      <!-- Drop zone -->
+      <div
+        id="drop-zone"
+        class="border-2 border-dashed border-base-content/20 rounded-2xl w-full p-10 flex flex-col items-center gap-4 cursor-pointer transition-colors hover:border-primary hover:bg-base-200"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-base-content/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+        </svg>
+        <div class="text-center">
+          <p class="font-semibold">Перетащите PGN сюда</p>
+          <p class="text-sm text-base-content/50">или нажмите для выбора файла</p>
+        </div>
+        <input id="pgn-input" type="file" accept=".pgn" class="hidden" />
+        <button class="btn btn-primary btn-sm pointer-events-none">Выбрать файл</button>
+      </div>
+
+      <!-- Divider -->
+      <div class="divider text-xs text-base-content/40 w-full">или</div>
+
+      <!-- Lichess URL -->
+      <div class="flex gap-2 w-full">
+        <input
+          id="lichess-input"
+          type="text"
+          placeholder="https://lichess.org/abc12345"
+          class="input input-bordered flex-1 text-sm"
+        />
+        <button id="btn-lichess" class="btn btn-outline btn-sm shrink-0">Загрузить</button>
+      </div>
+
+      <!-- Loading state -->
+      <div id="upload-loading" class="hidden flex-col items-center gap-3">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="text-sm text-base-content/60" id="upload-loading-text">Обрабатываю...</p>
+      </div>
+
+      <!-- Upload error -->
+      <div id="upload-error" class="hidden alert alert-error text-sm w-full">
+        <span id="upload-error-text"></span>
+      </div>
+
+      <!-- Recent games -->
+      <div id="recent-pgns" class="hidden w-full">
+        <div class="divider text-xs text-base-content/40">Недавние файлы</div>
+        <div id="recent-pgn-list" class="flex flex-col gap-2"></div>
+      </div>
+    </section>
+
+    <!-- ── Train screen ── -->
+    <section id="screen-train" class="hidden w-full max-w-7xl">
+      <div class="flex flex-col lg:flex-row gap-4 items-start justify-between">
+
+        <!-- Move list (left panel) -->
+        <div class="lg:w-56 w-full shrink-0 order-2 lg:order-1">
+          <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-3">
+              <div class="text-xs font-semibold text-base-content/50 mb-1">ХОДЫ</div>
+              <div id="move-list" class="overflow-y-auto max-h-[640px] font-mono text-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Board -->
+        <div class="flex flex-col items-center gap-3 min-w-0 order-1 lg:order-2">
+          <!-- Eval bar + board wrapper -->
+          <div class="flex gap-2 items-stretch">
+            <!-- Eval bar -->
+            <div id="eval-bar-wrap" class="hidden flex-col justify-center w-4 rounded-lg overflow-hidden bg-base-100 relative" style="height: var(--board-size)">
+              <div id="eval-bar-white" class="absolute bottom-0 left-0 right-0 bg-white transition-all duration-500 rounded-b-lg" style="height:50%"></div>
+              <div id="eval-score" class="absolute top-1 left-0 right-0 text-center text-[9px] font-bold text-black z-10"></div>
+            </div>
+            <div class="board-wrapper">
+              <div id="board"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Sidebar (right) -->
+        <div class="flex flex-col gap-3 w-full lg:w-64 shrink-0 order-3">
+
+          <!-- Game info -->
+          <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-3 gap-1">
+              <div class="flex justify-between items-baseline gap-1">
+                <div id="game-white" class="text-sm font-semibold truncate">White</div>
+                <div id="game-white-elo" class="text-xs text-base-content/40 shrink-0"></div>
+              </div>
+              <div class="text-xs text-base-content/30">vs</div>
+              <div class="flex justify-between items-baseline gap-1">
+                <div id="game-black" class="text-sm font-semibold truncate">Black</div>
+                <div id="game-black-elo" class="text-xs text-base-content/40 shrink-0"></div>
+              </div>
+              <div id="game-meta" class="text-xs text-base-content/40 mt-1"></div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="flex gap-2">
+            <button id="btn-flip" class="btn btn-ghost btn-sm flex-1" title="Перевернуть (F)">↕ Flip</button>
+            <button id="btn-hint" class="btn btn-warning btn-sm flex-1" disabled>
+              Подсказка <kbd class="kbd kbd-xs ml-1">H</kbd>
+            </button>
+          </div>
+
+          <!-- Progress -->
+          <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-4 gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-base-content/60">Ход</span>
+                <span id="move-counter" class="font-bold font-mono">—</span>
+              </div>
+              <progress id="progress-bar" class="progress progress-primary w-full" value="0" max="100"></progress>
+
+              <div class="divider my-0 text-xs opacity-30">Статистика</div>
+
+              <div class="flex justify-between text-xs">
+                <span class="text-base-content/50">Совпало с игрой</span>
+                <span id="stat-match-game" class="font-bold text-success">—</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-base-content/50">Топ движка</span>
+                <span id="stat-match-engine" class="font-bold text-info">—</span>
+              </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-base-content/50">Среднее время</span>
+                <span id="stat-avg-time" class="font-bold text-base-content/70">—</span>
+              </div>
+
+              <div class="text-[10px] text-base-content/30 mt-1 leading-relaxed">
+                <b class="text-success">С игрой</b> — ваш ход = ход гроссмейстера.<br>
+                <b class="text-info">Топ движка</b> — ваш ход в топ-N Stockfish.<br>
+                <b>Время</b> — среднее время на обдумывание хода.
+              </div>
+            </div>
+          </div>
+
+          <!-- Status message -->
+          <div id="status-msg" class="alert hidden">
+            <span id="status-text"></span>
+          </div>
+
+          <!-- Review navigation (visible only during error review) -->
+          <div id="review-controls" class="hidden card bg-base-200 shadow-sm">
+            <div class="card-body p-3 gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-base-content/50">РАЗБОР ОШИБОК</span>
+                <span id="review-counter" class="text-xs text-base-content/60">1 / 1</span>
+              </div>
+              <div class="flex gap-2">
+                <button id="btn-review-prev" class="btn btn-ghost btn-sm flex-1">← Пред</button>
+                <button id="btn-review-next" class="btn btn-primary btn-sm flex-1">След →</button>
+              </div>
+              <button id="btn-review-done" class="btn btn-ghost btn-xs w-full">Завершить разбор</button>
+            </div>
+          </div>
+
+          <!-- You play as -->
+          <div class="card bg-base-200 shadow-sm">
+            <div class="card-body p-3 gap-1">
+              <span class="text-xs text-base-content/40">Вы играете за</span>
+              <span id="you-play-as" class="text-sm font-bold text-primary">—</span>
+              <span class="text-xs text-base-content/40">Начало с хода <span id="start-move-badge" class="font-bold text-base-content/70">15</span></span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── Finish screen ── -->
+    <section id="screen-finish" class="hidden flex flex-col items-center gap-6 w-full max-w-md text-center">
+      <div class="text-6xl">🏁</div>
+      <div>
+        <h2 class="text-3xl font-bold mb-1">Партия завершена!</h2>
+        <p id="finish-subtitle" class="text-base-content/60 text-sm"></p>
+      </div>
+
+      <div class="stats stats-vertical lg:stats-horizontal shadow bg-base-200 w-full">
+        <div class="stat">
+          <div class="stat-title">Совпало с игрой</div>
+          <div id="finish-match-game" class="stat-value text-success">—</div>
+          <div id="finish-match-game-diff" class="stat-desc">из ходов</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Топ-1 движка</div>
+          <div id="finish-match-engine" class="stat-value text-info">—</div>
+          <div id="finish-match-engine-diff" class="stat-desc">из ходов</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Топ-3 движка</div>
+          <div id="finish-match-engine3" class="stat-value text-primary">—</div>
+          <div id="finish-match-engine3-diff" class="stat-desc">из ходов</div>
+        </div>
+      </div>
+
+      <!-- Move breakdown -->
+      <div id="finish-breakdown" class="w-full"></div>
+
+      <div class="flex gap-3 flex-wrap justify-center">
+        <button id="btn-retry" class="btn btn-primary">Ещё раз</button>
+        <button id="btn-review-errors" class="btn btn-outline btn-warning hidden">🔍 Разобрать ошибки</button>
+        <button id="btn-new-game" class="btn btn-ghost">Другая партия</button>
+      </div>
+    </section>
+
+    <!-- ── Stats screen ── -->
+    <section id="screen-stats" class="hidden w-full max-w-4xl">
+      <div class="flex flex-col gap-4">
+        <h2 class="text-2xl font-bold">История</h2>
+        <div id="stats-list" class="flex flex-col gap-3"></div>
+        <p id="stats-empty" class="text-base-content/40 text-center py-8 hidden">Нет сохранённых сессий</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== SETTINGS MODAL ===== -->
+  <dialog id="modal-settings" class="modal">
+    <div class="modal-box w-full max-w-md">
+      <h3 class="font-bold text-xl mb-5">Настройки тренировки</h3>
+
+      <div class="flex flex-col gap-5">
+
+        <!-- Game info card -->
+        <div class="bg-base-300 rounded-xl p-4 flex flex-col gap-2">
+          <p class="text-xs text-base-content/40 uppercase tracking-wide">Партия</p>
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex flex-col gap-0.5 min-w-0">
+              <span id="settings-white-player" class="font-semibold text-sm truncate"></span>
+              <span class="text-xs text-base-content/40">vs</span>
+              <span id="settings-black-player" class="font-semibold text-sm truncate"></span>
+            </div>
+            <div class="flex flex-col items-end gap-0.5 shrink-0 text-xs text-base-content/50">
+              <span id="settings-elo-white"></span>
+              <span class="invisible text-xs">vs</span>
+              <span id="settings-elo-black"></span>
+            </div>
+          </div>
+          <div class="divider my-0 opacity-30"></div>
+          <div class="flex flex-col gap-1 text-xs text-base-content/60">
+            <div id="settings-info-event" class="font-medium truncate"></div>
+            <div class="flex flex-wrap gap-x-4 gap-y-0.5">
+              <span id="settings-info-site"></span>
+              <span id="settings-info-date"></span>
+              <span id="settings-info-round"></span>
+              <span id="settings-info-eco"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Start move -->
+        <div class="flex items-center justify-between gap-4">
+          <span class="font-medium">Начать с хода</span>
+          <input id="settings-start" type="number" min="1" max="60" value="15"
+            class="input input-bordered input-primary w-24 text-center font-bold text-lg" />
+        </div>
+
+        <!-- Side -->
+        <div>
+          <p class="font-medium mb-2">Играть за</p>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+              <input id="settings-white" type="radio" name="side" value="w" class="radio radio-primary" checked />
+              <span class="text-sm font-medium">Белыми<br><span id="settings-white-name" class="text-xs text-base-content/50 font-normal">White</span></span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+              <input id="settings-black" type="radio" name="side" value="b" class="radio radio-primary" />
+              <span class="text-sm font-medium">Чёрными<br><span id="settings-black-name" class="text-xs text-base-content/50 font-normal">Black</span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="divider my-0 text-xs text-base-content/40">ДВИЖОК</div>
+
+        <!-- Engine depth -->
+        <div class="flex items-center justify-between gap-4">
+          <span class="font-medium">Глубина анализа</span>
+          <input id="settings-depth" type="number" min="10" max="30" step="1" value="18"
+            class="input input-bordered w-24 text-center font-bold text-lg" />
+        </div>
+
+        <!-- MultiPV -->
+        <div>
+          <p class="font-medium mb-2">Засчитывать попадание в топ</p>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+              <input type="radio" name="multipv" value="1" class="radio radio-primary radio-sm" />
+              <span class="text-sm">1 ход</span>
+            </label>
+            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+              <input type="radio" name="multipv" value="3" class="radio radio-primary radio-sm" checked />
+              <span class="text-sm">3 хода</span>
+            </label>
+            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+              <input type="radio" name="multipv" value="5" class="radio radio-primary radio-sm" />
+              <span class="text-sm">5 ходов</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Toggles -->
+        <div class="flex flex-col gap-2">
+          <label class="flex items-center justify-between p-3 rounded-xl bg-base-300 cursor-pointer">
+            <span class="font-medium text-sm">Показывать стрелку движка</span>
+            <input id="settings-arrow" type="checkbox" class="toggle toggle-primary" checked />
+          </label>
+          <label class="flex items-center justify-between p-3 rounded-xl bg-base-300 cursor-pointer">
+            <span class="font-medium text-sm">Показывать оценку позиции</span>
+            <input id="settings-eval" type="checkbox" class="toggle toggle-primary" />
+          </label>
+        </div>
+
+      </div>
+
+      <div class="modal-action mt-6">
+        <form method="dialog">
+          <button class="btn btn-ghost">Отмена</button>
+        </form>
+        <button id="btn-start" class="btn btn-primary px-8">Начать</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <!-- ===== PROMOTION OVERLAY ===== -->
+  <div id="promotion-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div class="bg-base-200 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-xl">
+      <p class="text-sm font-semibold text-base-content/70">Выбери фигуру</p>
+      <div id="promotion-pieces" class="flex gap-2"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

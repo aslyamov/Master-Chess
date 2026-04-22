@@ -1,0 +1,12 @@
+{
+  "name": "Master Chess Game",
+  "short_name": "MasterChess",
+  "description": "Guess the grandmaster's moves chess trainer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1d232a",
+  "theme_color": "#570df8",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" }
+  ]
+}
