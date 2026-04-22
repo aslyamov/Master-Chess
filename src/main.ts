@@ -422,17 +422,25 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
 
       // Show status with attempt count
       const attemptsStr = result.attempts > 1 ? ` (с ${result.attempts} попытки)` : '';
-      if (result.matchesEngineTop1) {
+      if (result.matchesGame) {
         showStatus('success', `✓ Совпало с партией!${attemptsStr}`, 2500);
-      } else if (result.matchesEngineTop3) {
-        showStatus('info', `✓ Совпало с партией${attemptsStr}, ≈ Топ-${settings.engineMultiPv} движка`, 2500);
+      } else if (result.matchesEngineTop1) {
+        showStatus('info', `≈ Топ-1 движка${attemptsStr} (в партии: ${result.gameMove})`, 3000);
       } else {
-        showStatus('success', `✓ Совпало с партией!${attemptsStr}`, 2500);
+        showStatus('info', `≈ Топ-${settings.engineMultiPv} движка${attemptsStr} (в партии: ${result.gameMove})`, 3000);
       }
 
-      // Show engine arrow if top move differs from game move
-      if (settings.showEngineArrow && result.engineTopMoves[0] && result.engineTopMoves[0] !== gameMoveUci) {
-        showArrows([{ orig: result.engineTopMoves[0].slice(0, 2) as Key, dest: result.engineTopMoves[0].slice(2, 4) as Key, brush: 'blue' }]);
+      // Show arrows after move
+      {
+        const arrows: { orig: Key; dest: Key; brush: string }[] = [];
+        if (!result.matchesGame) {
+          // User played engine move but not game move — show game move in green
+          arrows.push({ orig: gameMoveUci.slice(0, 2) as Key, dest: gameMoveUci.slice(2, 4) as Key, brush: 'green' });
+        }
+        if (settings.showEngineArrow && result.engineTopMoves[0] && result.engineTopMoves[0] !== gameMoveUci) {
+          arrows.push({ orig: result.engineTopMoves[0].slice(0, 2) as Key, dest: result.engineTopMoves[0].slice(2, 4) as Key, brush: 'blue' });
+        }
+        if (arrows.length) showArrows(arrows);
       }
 
       // Update inline stats

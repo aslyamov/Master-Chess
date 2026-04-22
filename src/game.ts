@@ -99,18 +99,10 @@ export class TrainSession {
     if (!applied) return;
 
     const matchGame = uci === gameMove;
-
-    if (!matchGame) {
-      // Wrong attempt — undo move, keep position, let user retry
-      this.chess.undo();
-      this.attemptsAtCurrentPly++;
-      this.cb.onWrongAttempt(uci, gameMove, fenBefore, this.attemptsAtCurrentPly);
-      return;
-    }
-
-    // Correct move — collect engine analysis (likely already done)
     const thinkingMs = this.positionReadyAt > 0 ? Date.now() - this.positionReadyAt : undefined;
 
+    // Always fetch engine analysis — pre-analysis ran while user was thinking,
+    // so this is usually an instant cache hit
     let engineTopMoves: string[] = [];
     let cpLoss: number | undefined;
 
@@ -130,6 +122,20 @@ export class TrainSession {
       } catch { /* engine may be busy */ }
     }
 
+    const engineMultiPv = this.settings.engineMultiPv;
+    const matchesEngineTop1 = engineTopMoves[0] === uci;
+    const matchesEngineTopN = engineTopMoves.slice(0, engineMultiPv).includes(uci);
+
+    // Retry if move doesn't match game AND engine doesn't approve it
+    if (!matchGame && !matchesEngineTopN) {
+      this.chess.undo();
+      this.attemptsAtCurrentPly++;
+      // Don't clear pre-analysis — FEN unchanged, result still valid next attempt
+      this.cb.onWrongAttempt(uci, gameMove, fenBefore, this.attemptsAtCurrentPly);
+      return;
+    }
+
+    // Move is accepted (matches game or engine approved)
     this.preAnalysisPromise = null;
     this.preAnalysisFen = '';
 
@@ -140,8 +146,8 @@ export class TrainSession {
       userMove:          uci,
       gameMove,
       engineTopMoves,
-      matchesGame:       true,
-      matchesEngineTop1: engineTopMoves[0] === uci,
+      matchesGame,
+      matchesEngineTop1,
       matchesEngineTop3: engineTopMoves.slice(0, 3).includes(uci),
       attempts:          this.attemptsAtCurrentPly + 1,
       cpLoss,
