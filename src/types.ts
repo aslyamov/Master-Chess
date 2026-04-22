@@ -32,7 +32,6 @@ export interface MoveResult {
   engineTopMoves: string[];
   matchesGame: boolean;
   matchesEngineTop1: boolean;
-  matchesEngineTop3: boolean;
   attempts: number;       // 1 = got it first try
   cpLoss?: number;
   thinkingMs?: number;
@@ -52,7 +51,6 @@ export interface TrainSettings {
   startMove: number;
   playerColor: 'w' | 'b' | 'auto';
   engineDepth: number;
-  engineMultiPv: number;
   showEval: boolean;
   showEngineArrow: boolean;
 }

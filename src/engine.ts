@@ -98,7 +98,7 @@ export class Engine {
       };
 
       this.worker!.postMessage('stop');
-      this.worker!.postMessage(`setoption name MultiPV value ${settings.engineMultiPv}`);
+      this.worker!.postMessage('setoption name MultiPV value 1');
       this.worker!.postMessage(`position fen ${fen}`);
       this.worker!.postMessage(`go depth ${settings.engineDepth}`);
     });

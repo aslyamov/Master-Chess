@@ -67,10 +67,8 @@ const btnReviewDone  = $<HTMLButtonElement>('btn-review-done');
 const finishSubtitle  = $('finish-subtitle');
 const finishMatchGame   = $('finish-match-game');
 const finishMatchEngine  = $('finish-match-engine');
-const finishMatchEngine3 = $('finish-match-engine3');
 const finishMatchGameDiff   = $('finish-match-game-diff');
 const finishMatchEngineDiff  = $('finish-match-engine-diff');
-const finishMatchEngine3Diff = $('finish-match-engine3-diff');
 const btnRetry        = $('btn-retry');
 const btnReviewErrors = $('btn-review-errors');
 const btnNewGame      = $('btn-new-game');
@@ -295,21 +293,16 @@ function openSettingsModal(game: PgnGame): void {
   settingsArrow.checked = s.showEngineArrow;
   settingsEval.checked  = s.showEval;
 
-  const mpvRadio = document.querySelector<HTMLInputElement>(`input[name="multipv"][value="${s.engineMultiPv}"]`);
-  if (mpvRadio) mpvRadio.checked = true;
-
   modalSettings.showModal();
 }
 
 
 btnStart.addEventListener('click', () => {
   if (!currentGame) return;
-  const mpv = document.querySelector<HTMLInputElement>('input[name="multipv"]:checked')?.value ?? '3';
   const settings: TrainSettings = {
     startMove:       parseInt(settingsStart.value),
     playerColor:     settingsWhiteRad.checked ? 'w' : 'b',
     engineDepth:     parseInt(settingsDepth.value),
-    engineMultiPv:   parseInt(mpv),
     showEngineArrow: settingsArrow.checked,
     showEval:        settingsEval.checked,
   };
@@ -424,10 +417,8 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       const attemptsStr = result.attempts > 1 ? ` (с ${result.attempts} попытки)` : '';
       if (result.matchesGame) {
         showStatus('success', `✓ Совпало с партией!${attemptsStr}`, 2500);
-      } else if (result.matchesEngineTop1) {
-        showStatus('info', `≈ Топ-1 движка${attemptsStr} (в партии: ${result.gameMove})`, 3000);
       } else {
-        showStatus('info', `≈ Топ-${settings.engineMultiPv} движка${attemptsStr} (в партии: ${result.gameMove})`, 3000);
+        showStatus('info', `≈ Лучший ход движка${attemptsStr} (в партии: ${result.gameMove})`, 3000);
       }
 
       // Show arrows after move
@@ -598,8 +589,8 @@ function moveCell(
 
   let cls = 'text-error';
   let icon = '✗';
-  if (result.matchesGame)      { cls = 'text-success'; icon = '✓'; }
-  else if (result.matchesEngineTop3) { cls = 'text-info'; icon = '≈'; }
+  if (result.matchesGame)           { cls = 'text-success'; icon = '✓'; }
+  else if (result.matchesEngineTop1) { cls = 'text-info';    icon = '≈'; }
 
   const displaySan = result.matchesGame ? san : (game.sanMoves[ply] ?? san);
   return `<span class="${cls} font-bold" title="${icon} ${result.userMove}">${displaySan}</span>`;
@@ -641,20 +632,17 @@ function showStatus(type: 'info' | 'success' | 'error' | 'warning', text: string
 // ── Finish screen ─────────────────────────────────────────────────────────────
 function showFinishScreen(game: PgnGame, settings: TrainSettings, results: MoveResult[]): void {
   const total = results.length;
-  const matchGame    = results.filter((r) => r.attempts === 1).length;  // first try
-  const matchEngine  = results.filter((r) => r.matchesEngineTop1).length;
-  const matchEngine3 = results.filter((r) => r.matchesEngineTop3).length;
+  const matchGame   = results.filter((r) => r.attempts === 1).length;
+  const matchEngine = results.filter((r) => r.matchesEngineTop1).length;
 
   const pct = (n: number) => total > 0 ? `${Math.round((n / total) * 100)}%` : '—';
 
   finishSubtitle.textContent = `${game.white} vs ${game.black} · старт с хода ${settings.startMove}`;
-  finishMatchGame.textContent    = pct(matchGame);
-  finishMatchEngine.textContent  = pct(matchEngine);
-  finishMatchEngine3.textContent = pct(matchEngine3);
+  finishMatchGame.textContent   = pct(matchGame);
+  finishMatchEngine.textContent = pct(matchEngine);
 
-  finishMatchGameDiff.textContent   = `${matchGame} из ${total} ходов`;
-  finishMatchEngineDiff.textContent  = `${matchEngine} из ${total} ходов`;
-  finishMatchEngine3Diff.textContent = `${matchEngine3} из ${total} ходов`;
+  finishMatchGameDiff.textContent  = `${matchGame} из ${total} ходов`;
+  finishMatchEngineDiff.textContent = `${matchEngine} из ${total} ходов`;
 
   // Compare with previous attempt
   const allAttempts = loadAttempts(game.id);

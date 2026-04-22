@@ -122,12 +122,10 @@ export class TrainSession {
       } catch { /* engine may be busy */ }
     }
 
-    const engineMultiPv = this.settings.engineMultiPv;
     const matchesEngineTop1 = engineTopMoves[0] === uci;
-    const matchesEngineTopN = engineTopMoves.slice(0, engineMultiPv).includes(uci);
 
-    // Retry if move doesn't match game AND engine doesn't approve it
-    if (!matchGame && !matchesEngineTopN) {
+    // Retry if move doesn't match game AND isn't the engine's best move
+    if (!matchGame && !matchesEngineTop1) {
       this.chess.undo();
       this.attemptsAtCurrentPly++;
       // Don't clear pre-analysis — FEN unchanged, result still valid next attempt
@@ -148,7 +146,6 @@ export class TrainSession {
       engineTopMoves,
       matchesGame,
       matchesEngineTop1,
-      matchesEngineTop3: engineTopMoves.slice(0, 3).includes(uci),
       attempts:          this.attemptsAtCurrentPly + 1,
       cpLoss,
       thinkingMs,

@@ -167,7 +167,7 @@
 
               <div class="text-[10px] text-base-content/30 mt-1 leading-relaxed">
                 <b class="text-success">С первой попытки</b> — угадал ход гроссмейстера сразу.<br>
-                <b class="text-info">Топ движка</b> — ваш ход в топ-N Stockfish.<br>
+                <b class="text-info">Топ движка</b> — ваш ход = лучший ход Stockfish.<br>
                 <b>Время</b> — среднее время на обдумывание хода.
               </div>
             </div>
@@ -225,11 +225,6 @@
           <div class="stat-title">Топ-1 движка</div>
           <div id="finish-match-engine" class="stat-value text-info">—</div>
           <div id="finish-match-engine-diff" class="stat-desc">из ходов</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">Топ-3 движка</div>
-          <div id="finish-match-engine3" class="stat-value text-primary">—</div>
-          <div id="finish-match-engine3-diff" class="stat-desc">из ходов</div>
         </div>
       </div>
 
@@ -317,25 +312,6 @@
           <span class="font-medium">Глубина анализа</span>
           <input id="settings-depth" type="number" min="10" max="30" step="1" value="18"
             class="input input-bordered w-24 text-center font-bold text-lg" />
-        </div>
-
-        <!-- MultiPV -->
-        <div>
-          <p class="font-medium mb-2">Засчитывать попадание в топ</p>
-          <div class="grid grid-cols-3 gap-2">
-            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
-              <input type="radio" name="multipv" value="1" class="radio radio-primary radio-sm" />
-              <span class="text-sm">1 ход</span>
-            </label>
-            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
-              <input type="radio" name="multipv" value="3" class="radio radio-primary radio-sm" checked />
-              <span class="text-sm">3 хода</span>
-            </label>
-            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-base-content/10 cursor-pointer hover:border-primary transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/10">
-              <input type="radio" name="multipv" value="5" class="radio radio-primary radio-sm" />
-              <span class="text-sm">5 ходов</span>
-            </label>
-          </div>
         </div>
 
         <!-- Toggles -->
