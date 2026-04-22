@@ -36,9 +36,18 @@ export function deletePgn(id: string): void {
 
 // ── Attempts ──────────────────────────────────────────────────────────────────
 
+const MAX_ATTEMPTS_PER_GAME = 25;
+
 export function saveAttempt(attempt: GameAttempt): void {
   const all = loadAllAttempts();
   all.push(attempt);
+  // Keep only the most recent MAX_ATTEMPTS_PER_GAME per game
+  const gameAttempts = all.filter(a => a.gameId === attempt.gameId);
+  if (gameAttempts.length > MAX_ATTEMPTS_PER_GAME) {
+    const oldest = gameAttempts[0];
+    const idx = all.findIndex(a => a.id === oldest.id);
+    if (idx >= 0) all.splice(idx, 1);
+  }
   localStorage.setItem(KEY.attempts, JSON.stringify(all));
 }
 

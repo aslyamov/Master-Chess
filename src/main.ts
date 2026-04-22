@@ -824,71 +824,182 @@ function showReviewMove(): void {
 }
 
 // ── Stats screen ──────────────────────────────────────────────────────────────
-function renderStats(): void {
-  const all = loadAllAttempts().slice().reverse();
-  const statsListEl = $('stats-list');
-  const emptyEl = $('stats-empty');
+const statsCharts: Chart[] = [];
 
-  if (all.length === 0) {
+function renderStats(): void {
+  const statsListEl = $('stats-list');
+  const emptyEl     = $('stats-empty');
+
+  // Destroy previous charts
+  statsCharts.forEach(c => c.destroy());
+  statsCharts.length = 0;
+
+  const allAttempts = loadAllAttempts();
+  if (allAttempts.length === 0) {
     statsListEl.innerHTML = '';
     emptyEl.classList.remove('hidden');
     return;
   }
   emptyEl.classList.add('hidden');
 
-  // Group by gameId to compute trends
+  // Group by gameId, preserve insertion order (oldest first within each game)
   const byGame = new Map<string, import('./types').GameAttempt[]>();
-  for (const a of loadAllAttempts()) {
+  for (const a of allAttempts) {
     const arr = byGame.get(a.gameId) ?? [];
     arr.push(a);
     byGame.set(a.gameId, arr);
   }
 
-  statsListEl.innerHTML = all.map((a: import('./types').GameAttempt) => {
-    const total    = a.moveResults.length;
-    const matchG   = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesGame).length;
-    const firstTry = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesGame && r.attempts === 1).length;
-    const matchE   = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesEngineTop1).length;
-    const avgAttempts = total > 0 ? (a.moveResults.reduce((s: number, r: import('./types').MoveResult) => s + r.attempts, 0) / total).toFixed(1) : '—';
+  // Sort games: most recently played first
+  const sortedGames = Array.from(byGame.entries()).sort((a, b) => {
+    const latestA = a[1][a[1].length - 1].date;
+    const latestB = b[1][b[1].length - 1].date;
+    return latestB.localeCompare(latestA);
+  });
+
+  statsListEl.innerHTML = '';
+
+  for (const [, attempts] of sortedGames) {
+    const latest   = attempts[attempts.length - 1];
+    const chartId  = `chart-${latest.gameId.replace(/[^a-z0-9]/gi, '')}`;
+    const multiRun = attempts.length > 1;
+
+    // Latest attempt stats
+    const total    = latest.moveResults.length;
+    const matchG   = latest.moveResults.filter(r => r.matchesGame).length;
+    const firstTry = latest.moveResults.filter(r => r.matchesGame && r.attempts === 1).length;
+    const matchE   = latest.moveResults.filter(r => r.matchesEngineTop1).length;
+    const avgAttempts = total > 0
+      ? (latest.moveResults.reduce((s, r) => s + r.attempts, 0) / total).toFixed(1)
+      : '—';
     const pct = (n: number) => total > 0 ? `${Math.round((n / total) * 100)}%` : '—';
 
-    // Trend vs previous attempt for same game
+    // Trend vs previous attempt
     let trendHtml = '';
-    const gameSessions = byGame.get(a.gameId) ?? [];
-    const idx = gameSessions.findIndex(s => s.id === a.id);
-    if (idx > 0) {
-      const prev = gameSessions[idx - 1];
+    if (attempts.length >= 2) {
+      const prev      = attempts[attempts.length - 2];
       const prevTotal = prev.moveResults.length;
-      const prevMatchG = prev.moveResults.filter((r: import('./types').MoveResult) => r.matchesGame).length;
+      const prevMatchG = prev.moveResults.filter(r => r.matchesGame).length;
       if (prevTotal > 0 && total > 0) {
         const diff = Math.round(((matchG / total) - (prevMatchG / prevTotal)) * 100);
         if (Math.abs(diff) >= 1) {
-          const arrow = diff > 0 ? '↑' : '↓';
-          const cls   = diff > 0 ? 'text-success' : 'text-error';
-          trendHtml = `<span class="${cls} text-xs font-bold ml-1">${arrow}${Math.abs(diff)}%</span>`;
+          const cls = diff > 0 ? 'text-success' : 'text-error';
+          trendHtml = `<span class="${cls} font-bold ml-1">${diff > 0 ? '↑' : '↓'}${Math.abs(diff)}%</span>`;
         }
       }
     }
 
-    return `
-      <div class="card bg-base-200 shadow-sm">
-        <div class="card-body p-4 gap-2">
-          <div class="flex justify-between items-start gap-2">
-            <div class="min-w-0">
-              <p class="font-semibold text-sm truncate">${a.gameName}</p>
-              <p class="text-xs text-base-content/40">Старт: ход ${a.startMove} · ${a.playerColor === 'w' ? 'Белые' : 'Чёрные'}</p>
-              <p class="text-xs text-base-content/30">${new Date(a.date).toLocaleDateString('ru')}</p>
-            </div>
-            <div class="text-right shrink-0">
-              <p class="text-success font-bold">${pct(matchG)}${trendHtml} <span class="text-xs text-base-content/40">партия</span></p>
-              <p class="text-success/60 text-sm">${pct(firstTry)} <span class="text-xs text-base-content/40">с первой</span></p>
-              <p class="text-info text-sm">${pct(matchE)} <span class="text-xs text-base-content/40">движок</span></p>
-              <p class="text-base-content/50 text-xs">${avgAttempts} поп/ход</p>
-            </div>
+    // Attempts rows (newest first, skip latest — shown in header)
+    const historyRows = attempts.slice(0, -1).reverse().map((a, i) => {
+      const t  = a.moveResults.length;
+      const mg = a.moveResults.filter(r => r.matchesGame).length;
+      const me = a.moveResults.filter(r => r.matchesEngineTop1).length;
+      const p  = (n: number) => t > 0 ? `${Math.round((n / t) * 100)}%` : '—';
+      const num = attempts.length - 1 - i;
+      return `<tr class="text-xs text-base-content/60">
+        <td class="py-0.5 pr-2 text-base-content/30">#${num}</td>
+        <td class="pr-2">${new Date(a.date).toLocaleDateString('ru')}</td>
+        <td class="pr-2 text-success">${p(mg)}</td>
+        <td class="text-info">${p(me)}</td>
+      </tr>`;
+    }).join('');
+
+    const card = document.createElement('div');
+    card.className = 'card bg-base-200 shadow-sm';
+    card.innerHTML = `
+      <div class="card-body p-4 gap-3">
+        <!-- Header -->
+        <div class="flex justify-between items-start gap-2">
+          <div class="min-w-0">
+            <p class="font-semibold text-sm truncate">${latest.gameName}</p>
+            <p class="text-xs text-base-content/40">Ход ${latest.startMove} · ${latest.playerColor === 'w' ? 'Белые' : 'Чёрные'} · ${attempts.length} ${attempts.length === 1 ? 'попытка' : attempts.length < 5 ? 'попытки' : 'попыток'}</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-success font-bold text-sm">${pct(matchG)}${trendHtml} <span class="text-xs text-base-content/40">партия</span></p>
+            <p class="text-success/60 text-xs">${pct(firstTry)} <span class="text-base-content/40">с первой</span></p>
+            <p class="text-info text-xs">${pct(matchE)} <span class="text-base-content/40">движок</span></p>
+            <p class="text-base-content/40 text-xs">${avgAttempts} поп/ход</p>
           </div>
         </div>
+
+        ${multiRun ? `<!-- Progress chart -->
+        <div><canvas id="${chartId}" height="60"></canvas></div>` : ''}
+
+        ${multiRun ? `<!-- History rows -->
+        <details class="text-xs">
+          <summary class="cursor-pointer text-base-content/40 hover:text-base-content/70 select-none">История попыток</summary>
+          <table class="mt-2 w-full">
+            <thead><tr class="text-base-content/30 text-[10px]">
+              <th class="text-left font-normal pr-2">#</th>
+              <th class="text-left font-normal pr-2">Дата</th>
+              <th class="text-left font-normal pr-2">Партия</th>
+              <th class="text-left font-normal">Движок</th>
+            </tr></thead>
+            <tbody>${historyRows}</tbody>
+          </table>
+        </details>` : ''}
       </div>`;
-  }).join('');
+
+    statsListEl.appendChild(card);
+
+    // Draw progress chart after DOM insertion
+    if (multiRun) {
+      const canvas = document.getElementById(chartId) as HTMLCanvasElement | null;
+      if (canvas) {
+        const labels = attempts.map((_a, i) => `#${i + 1}`);
+        const gameData  = attempts.map(a => {
+          const t = a.moveResults.length;
+          return t > 0 ? Math.round((a.moveResults.filter(r => r.matchesGame).length / t) * 100) : 0;
+        });
+        const engineData = attempts.map(a => {
+          const t = a.moveResults.length;
+          return t > 0 ? Math.round((a.moveResults.filter(r => r.matchesEngineTop1).length / t) * 100) : 0;
+        });
+
+        const chart = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Партия %',
+                data: gameData,
+                backgroundColor: 'rgba(34,197,94,0.7)',
+                borderRadius: 3,
+                order: 2,
+              },
+              {
+                label: 'Движок %',
+                data: engineData,
+                type: 'line' as const,
+                borderColor: 'rgba(56,189,248,0.8)',
+                backgroundColor: 'transparent',
+                pointRadius: 3,
+                tension: 0.3,
+                order: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: (items) => `Попытка ${items[0].label}`,
+                },
+              },
+            },
+            scales: {
+              x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+              y: { min: 0, max: 100, ticks: { stepSize: 25, font: { size: 9 }, callback: v => `${v}%` }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            },
+          },
+        });
+        statsCharts.push(chart);
+      }
+    }
+  }
 }
 
 // ── PWA ───────────────────────────────────────────────────────────────────────
