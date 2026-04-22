@@ -439,7 +439,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
 
       // Update inline stats
       updateProgress(
-        Array.from(moveResultsMap.values()).filter((r) => r.attempts === 1).length,
+        Array.from(moveResultsMap.values()).filter((r) => r.matchesGame).length,
         Array.from(moveResultsMap.values()).filter((r) => r.matchesEngineTop1).length,
         moveResultsMap.size,
       );
@@ -635,7 +635,7 @@ function showStatus(type: 'info' | 'success' | 'error' | 'warning', text: string
 // ── Finish screen ─────────────────────────────────────────────────────────────
 function showFinishScreen(game: PgnGame, settings: TrainSettings, results: MoveResult[]): void {
   const total = results.length;
-  const matchGame   = results.filter((r) => r.attempts === 1).length;
+  const matchGame   = results.filter((r) => r.matchesGame).length;
   const matchEngine = results.filter((r) => r.matchesEngineTop1).length;
 
   const pct = (n: number) => total > 0 ? `${Math.round((n / total) * 100)}%` : '—';
