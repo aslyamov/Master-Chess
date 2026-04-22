@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [tailwindcss()],
-  base: '/',
+  base: '/Master-Chess/',
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',

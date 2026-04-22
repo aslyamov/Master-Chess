@@ -16,12 +16,10 @@ if (!existsSync(sfRoot)) {
   process.exit(0);
 }
 
-// Use lite variant — sufficient for depth 10-22, loads faster (~7MB vs ~60MB)
+// Use lite variant only — sufficient for depth 10-22, loads faster (~7 MB vs ~107 MB)
 const candidates = [
   'stockfish-18-lite.js',
   'stockfish-18-lite.wasm',
-  'stockfish.js',
-  'stockfish.wasm',
 ];
 
 for (const file of candidates) {
