@@ -1,6 +1,6 @@
 import { Chess } from 'chess.js';
 import type { PgnGame, MoveResult, TrainSettings } from './types';
-import type { Engine } from './engine';
+import type { Engine, AnalysisResult } from './engine';
 
 export interface SessionCallbacks {
   onPositionReady(fen: string, color: 'w' | 'b', moveNumber: number, plyIndex: number): void;
@@ -19,6 +19,10 @@ export class TrainSession {
   private destroyed = false;
   private positionReadyAt = 0;
   private timers: ReturnType<typeof setTimeout>[] = [];
+
+  // Pre-analysis: engine starts while user is thinking
+  private preAnalysisPromise: Promise<AnalysisResult> | null = null;
+  private preAnalysisFen = '';
 
   readonly game: PgnGame;
   readonly settings: TrainSettings;
@@ -67,10 +71,21 @@ export class TrainSession {
       this.cb.onSessionDone(this.results);
       return;
     }
+    const fen = this.chess.fen();
     const color = this.chess.turn();
     const moveNumber = Math.floor(this.currentPly / 2) + 1;
+
+    // Start engine analysis immediately so it runs while the user thinks
+    this.startPreAnalysis(fen);
+
     this.positionReadyAt = Date.now();
-    this.cb.onPositionReady(this.chess.fen(), color, moveNumber, this.currentPly);
+    this.cb.onPositionReady(fen, color, moveNumber, this.currentPly);
+  }
+
+  private startPreAnalysis(fen: string): void {
+    if (!this.engine.isReady) return;
+    this.preAnalysisFen = fen;
+    this.preAnalysisPromise = this.engine.analyze(fen, this.settings).catch(() => ({ topMoves: [], bestMove: '' }));
   }
 
   async applyUserMove(uci: string): Promise<void> {
@@ -90,17 +105,20 @@ export class TrainSession {
 
     const matchGame = uci === gameMove;
 
-    // Get engine analysis on pre-move position
+    // Get engine analysis — use pre-analysis result if it's for this position,
+    // otherwise fall back to a fresh request
     let engineTopMoves: string[] = [];
     let cpLoss: number | undefined;
 
     if (this.engine.isReady) {
       try {
-        const res = await this.engine.analyze(fenBefore, this.settings);
+        const res = this.preAnalysisFen === fenBefore && this.preAnalysisPromise
+          ? await this.preAnalysisPromise
+          : await this.engine.analyze(fenBefore, this.settings);
+
         engineTopMoves = res.topMoves.map((m) => m.move);
 
-        // cp loss: best engine score minus score of the move the user played
-        const bestCp  = res.topMoves[0]?.score ?? 0;
+        const bestCp   = res.topMoves[0]?.score ?? 0;
         const userLine = res.topMoves.find((m) => m.move === uci);
         if (userLine !== undefined) {
           cpLoss = Math.max(0, bestCp - userLine.score);
@@ -109,6 +127,9 @@ export class TrainSession {
         }
       } catch { /* engine may be busy */ }
     }
+
+    this.preAnalysisPromise = null;
+    this.preAnalysisFen = '';
 
     const result: MoveResult = {
       ply:               this.currentPly,
@@ -195,6 +216,8 @@ export class TrainSession {
 
   destroy(): void {
     this.destroyed = true;
+    this.preAnalysisPromise = null;
+    this.preAnalysisFen = '';
     this.timers.forEach(t => clearTimeout(t));
     this.timers = [];
   }
