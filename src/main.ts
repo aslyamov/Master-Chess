@@ -1,6 +1,9 @@
 import './style.css';
+import { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip } from 'chart.js';
 import { Chess } from 'chess.js';
 import type { Key } from '@lichess-org/chessground/types';
+
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
 
 import {
   initBoard, setPosition, setMovable, lockBoard, makeMove, setFen,
@@ -69,6 +72,9 @@ const finishMatchGame   = $('finish-match-game');
 const finishMatchEngine  = $('finish-match-engine');
 const finishMatchGameDiff   = $('finish-match-game-diff');
 const finishMatchEngineDiff  = $('finish-match-engine-diff');
+const finishFirstTry    = $('finish-first-try');
+const finishAvgTime     = $('finish-avg-time');
+const finishAvgAttempts = $('finish-avg-attempts');
 const btnRetry        = $('btn-retry');
 const btnReviewErrors = $('btn-review-errors');
 const btnNewGame      = $('btn-new-game');
@@ -600,24 +606,34 @@ function moveCell(
 }
 
 // ── Progress & status ─────────────────────────────────────────────────────────
-const statAvgTime = $('stat-avg-time');
+const statAvgTime     = $('stat-avg-time');
+const statFirstTry    = $('stat-first-try');
+const statAvgAttempts = $('stat-avg-attempts');
 
 function updateProgress(matchGame: number, matchEngine: number, total: number): void {
   if (total === 0) {
-    statMatchGame.textContent   = '—';
-    statMatchEngine.textContent = '—';
-    statAvgTime.textContent     = '—';
+    statMatchGame.textContent    = '—';
+    statFirstTry.textContent     = '—';
+    statMatchEngine.textContent  = '—';
+    statAvgTime.textContent      = '—';
+    statAvgAttempts.textContent  = '—';
     return;
   }
+  const results = Array.from(moveResultsMap.values());
+  const firstTry = results.filter(r => r.matchesGame && r.attempts === 1).length;
+
   statMatchGame.textContent   = `${Math.round((matchGame / total) * 100)}%`;
+  statFirstTry.textContent    = `${Math.round((firstTry / total) * 100)}%`;
   statMatchEngine.textContent = `${Math.round((matchEngine / total) * 100)}%`;
 
-  const times = Array.from(moveResultsMap.values())
-    .map(r => r.thinkingMs).filter((t): t is number => t !== undefined);
+  const times = results.map(r => r.thinkingMs).filter((t): t is number => t !== undefined);
   if (times.length > 0) {
     const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length / 1000);
     statAvgTime.textContent = `${avg}с`;
   }
+
+  const avgAttempts = results.reduce((s, r) => s + r.attempts, 0) / results.length;
+  statAvgAttempts.textContent = avgAttempts.toFixed(1);
 }
 
 let statusTimer = 0;
@@ -633,19 +649,22 @@ function showStatus(type: 'info' | 'success' | 'error' | 'warning', text: string
 }
 
 // ── Finish screen ─────────────────────────────────────────────────────────────
+let finishChartInstance: Chart | null = null;
+
 function showFinishScreen(game: PgnGame, settings: TrainSettings, results: MoveResult[]): void {
   const total = results.length;
   const matchGame   = results.filter((r) => r.matchesGame).length;
+  const firstTry    = results.filter((r) => r.matchesGame && r.attempts === 1).length;
   const matchEngine = results.filter((r) => r.matchesEngineTop1).length;
 
   const pct = (n: number) => total > 0 ? `${Math.round((n / total) * 100)}%` : '—';
 
   finishSubtitle.textContent = `${game.white} vs ${game.black} · старт с хода ${settings.startMove}`;
-  finishMatchGame.textContent   = pct(matchGame);
-  finishMatchEngine.textContent = pct(matchEngine);
 
-  finishMatchGameDiff.textContent  = `${matchGame} из ${total} ходов`;
-  finishMatchEngineDiff.textContent = `${matchEngine} из ${total} ходов`;
+  // Партия card
+  finishMatchGame.textContent   = pct(matchGame);
+  finishFirstTry.textContent    = pct(firstTry);
+  finishMatchGameDiff.textContent = `${matchGame} из ${total} ходов`;
 
   // Compare with previous attempt
   const allAttempts = loadAttempts(game.id);
@@ -657,6 +676,66 @@ function showFinishScreen(game: PgnGame, settings: TrainSettings, results: MoveR
     if (Math.abs(diff) >= 1) {
       finishMatchGameDiff.textContent += ` (${diff > 0 ? '↑' : '↓'}${Math.abs(diff)}% vs прошлый раз)`;
     }
+  }
+
+  // Движок card
+  finishMatchEngine.textContent    = pct(matchEngine);
+  finishMatchEngineDiff.textContent = `${matchEngine} из ${total} ходов`;
+
+  // Скорость card
+  const times = results.map(r => r.thinkingMs).filter((t): t is number => t !== undefined);
+  if (times.length > 0) {
+    const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length / 1000);
+    finishAvgTime.textContent = `${avg}с`;
+  } else {
+    finishAvgTime.textContent = '—';
+  }
+  const avgAttempts = total > 0 ? (results.reduce((s, r) => s + r.attempts, 0) / total).toFixed(1) : '—';
+  finishAvgAttempts.textContent = avgAttempts;
+
+  // Chart: attempts per move
+  const canvas = document.getElementById('finish-chart') as HTMLCanvasElement | null;
+  if (canvas) {
+    finishChartInstance?.destroy();
+    const labels = results.map(r => `${r.moveNumber}${r.side === 'w' ? 'w' : 'b'}`);
+    const colors = results.map(r =>
+      r.matchesGame && r.attempts === 1 ? '#22c55e' :
+      r.matchesGame                     ? '#86efac' :
+      r.matchesEngineTop1               ? '#38bdf8' : '#f87171'
+    );
+    finishChartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Попытки',
+          data: results.map(r => r.attempts),
+          backgroundColor: colors,
+          borderRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const r = results[ctx.dataIndex];
+                const status = r.matchesGame && r.attempts === 1 ? 'партия (1я попытка)' :
+                               r.matchesGame                     ? 'партия' :
+                               r.matchesEngineTop1               ? 'движок' : 'неверно';
+                return `${ctx.raw} поп. · ${status}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { ticks: { font: { size: 9 }, maxRotation: 0 }, grid: { display: false } },
+          y: { ticks: { stepSize: 1 }, beginAtZero: true },
+        },
+      },
+    });
   }
 
   reviewMoves = results.filter((r) => !r.matchesGame);
@@ -757,23 +836,54 @@ function renderStats(): void {
   }
   emptyEl.classList.add('hidden');
 
+  // Group by gameId to compute trends
+  const byGame = new Map<string, import('./types').GameAttempt[]>();
+  for (const a of loadAllAttempts()) {
+    const arr = byGame.get(a.gameId) ?? [];
+    arr.push(a);
+    byGame.set(a.gameId, arr);
+  }
+
   statsListEl.innerHTML = all.map((a: import('./types').GameAttempt) => {
-    const total   = a.moveResults.length;
-    const matchG  = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesGame).length;
-    const matchE  = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesEngineTop1).length;
+    const total    = a.moveResults.length;
+    const matchG   = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesGame).length;
+    const firstTry = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesGame && r.attempts === 1).length;
+    const matchE   = a.moveResults.filter((r: import('./types').MoveResult) => r.matchesEngineTop1).length;
+    const avgAttempts = total > 0 ? (a.moveResults.reduce((s: number, r: import('./types').MoveResult) => s + r.attempts, 0) / total).toFixed(1) : '—';
     const pct = (n: number) => total > 0 ? `${Math.round((n / total) * 100)}%` : '—';
+
+    // Trend vs previous attempt for same game
+    let trendHtml = '';
+    const gameSessions = byGame.get(a.gameId) ?? [];
+    const idx = gameSessions.findIndex(s => s.id === a.id);
+    if (idx > 0) {
+      const prev = gameSessions[idx - 1];
+      const prevTotal = prev.moveResults.length;
+      const prevMatchG = prev.moveResults.filter((r: import('./types').MoveResult) => r.matchesGame).length;
+      if (prevTotal > 0 && total > 0) {
+        const diff = Math.round(((matchG / total) - (prevMatchG / prevTotal)) * 100);
+        if (Math.abs(diff) >= 1) {
+          const arrow = diff > 0 ? '↑' : '↓';
+          const cls   = diff > 0 ? 'text-success' : 'text-error';
+          trendHtml = `<span class="${cls} text-xs font-bold ml-1">${arrow}${Math.abs(diff)}%</span>`;
+        }
+      }
+    }
+
     return `
       <div class="card bg-base-200 shadow-sm">
-        <div class="card-body p-4 gap-1">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="font-semibold text-sm">${a.gameName}</p>
+        <div class="card-body p-4 gap-2">
+          <div class="flex justify-between items-start gap-2">
+            <div class="min-w-0">
+              <p class="font-semibold text-sm truncate">${a.gameName}</p>
               <p class="text-xs text-base-content/40">Старт: ход ${a.startMove} · ${a.playerColor === 'w' ? 'Белые' : 'Чёрные'}</p>
               <p class="text-xs text-base-content/30">${new Date(a.date).toLocaleDateString('ru')}</p>
             </div>
-            <div class="text-right">
-              <p class="text-success font-bold">${pct(matchG)} <span class="text-xs text-base-content/40">партия</span></p>
+            <div class="text-right shrink-0">
+              <p class="text-success font-bold">${pct(matchG)}${trendHtml} <span class="text-xs text-base-content/40">партия</span></p>
+              <p class="text-success/60 text-sm">${pct(firstTry)} <span class="text-xs text-base-content/40">с первой</span></p>
               <p class="text-info text-sm">${pct(matchE)} <span class="text-xs text-base-content/40">движок</span></p>
+              <p class="text-base-content/50 text-xs">${avgAttempts} поп/ход</p>
             </div>
           </div>
         </div>
