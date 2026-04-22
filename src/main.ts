@@ -408,7 +408,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       }, 600));
     },
 
-    onUserMoveResult(result, gameMoveUci, _fenBefore) {
+    onUserMoveResult(result, gameMoveUci, fenBefore) {
       moveResultsMap.set(result.ply, result);
       lockBoard();
       btnHint.disabled = true;
@@ -421,17 +421,20 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
         showStatus('info', `≈ Лучший ход движка${attemptsStr} (в партии: ${result.gameMove})`, 3000);
       }
 
-      // Show arrows after move
-      {
-        const arrows: { orig: Key; dest: Key; brush: string }[] = [];
-        if (!result.matchesGame) {
-          // User played engine move but not game move — show game move in green
-          arrows.push({ orig: gameMoveUci.slice(0, 2) as Key, dest: gameMoveUci.slice(2, 4) as Key, brush: 'green' });
-        }
-        if (settings.showEngineArrow && result.engineTopMoves[0] && result.engineTopMoves[0] !== gameMoveUci) {
-          arrows.push({ orig: result.engineTopMoves[0].slice(0, 2) as Key, dest: result.engineTopMoves[0].slice(2, 4) as Key, brush: 'blue' });
-        }
-        if (arrows.length) showArrows(arrows);
+      // If user played engine move ≠ game move: animate game move on board
+      // so board position stays on the actual game line
+      if (!result.matchesGame) {
+        const capturedSession = session;
+        boardTimers.push(setTimeout(() => {
+          if (session !== capturedSession) return;
+          setFen(fenBefore);
+          makeMove(gameMoveUci.slice(0, 2) as Key, gameMoveUci.slice(2, 4) as Key);
+        }, 450));
+      }
+
+      // Show engine arrow if engine top move differs from game move
+      if (settings.showEngineArrow && result.engineTopMoves[0] && result.engineTopMoves[0] !== gameMoveUci) {
+        showArrows([{ orig: result.engineTopMoves[0].slice(0, 2) as Key, dest: result.engineTopMoves[0].slice(2, 4) as Key, brush: 'blue' }]);
       }
 
       // Update inline stats

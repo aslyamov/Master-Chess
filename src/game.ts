@@ -155,6 +155,12 @@ export class TrainSession {
     this.results.push(result);
     this.currentPly++;
 
+    // Keep internal position on the game line regardless of what user played
+    if (!matchGame) {
+      this.chess.undo();
+      this.applyUci(this.chess, gameMove);
+    }
+
     this.cb.onUserMoveResult(result, gameMove, fenBefore);
     this.timers.push(setTimeout(() => this.autoPlayOpponent(), 750));
   }
