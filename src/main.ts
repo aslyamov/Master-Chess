@@ -60,9 +60,9 @@ const btnHint      = $<HTMLButtonElement>('btn-hint');
 
 const reviewControls = $('review-controls');
 const reviewCounter  = $('review-counter');
-const btnReviewPrev  = $('btn-review-prev');
-const btnReviewNext  = $('btn-review-next');
-const btnReviewDone  = $('btn-review-done');
+const btnReviewPrev  = $<HTMLButtonElement>('btn-review-prev');
+const btnReviewNext  = $<HTMLButtonElement>('btn-review-next');
+const btnReviewDone  = $<HTMLButtonElement>('btn-review-done');
 
 const finishSubtitle  = $('finish-subtitle');
 const finishMatchGame   = $('finish-match-game');
@@ -376,7 +376,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
   updateProgress(0, 0, 0);
 
   session = new TrainSession(game, settings, engine, {
-    onPositionReady(fen, color, moveNumber, plyIndex) {
+    onPositionReady(fen, color, _moveNumber, plyIndex) {
       const chess = new Chess(fen);
       const dests = getLegalDests(chess);
       const cgColor = color === 'w' ? 'white' : 'black';
