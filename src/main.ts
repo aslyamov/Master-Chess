@@ -780,7 +780,7 @@ function renderStats(): void {
 
 // ── PWA ───────────────────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => { /* ok in dev */ });
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => { /* ok in dev */ });
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
