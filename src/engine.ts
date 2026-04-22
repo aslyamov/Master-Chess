@@ -20,7 +20,7 @@ export class Engine {
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.worker = new Worker('/stockfish-18-lite.js');
+        this.worker = new Worker(`${import.meta.env.BASE_URL}stockfish-18-lite.js`);
       } catch {
         reject(new Error('Stockfish worker не найден. Проверьте public/stockfish-18-lite.js'));
         return;
