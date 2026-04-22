@@ -144,7 +144,7 @@ export class TrainSession {
       userMove:          uci,
       gameMove,
       engineTopMoves,
-      matchesGame,
+      matchesGame:       matchGame,
       matchesEngineTop1,
       attempts:          this.attemptsAtCurrentPly + 1,
       cpLoss,

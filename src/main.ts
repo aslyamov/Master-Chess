@@ -386,7 +386,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       renderMoveList(game, settings, moveResultsMap, opponentPlayedPlies);
     },
 
-    onWrongAttempt(uci, gameMoveUci, fenBefore, attempt) {
+    onWrongAttempt(uci, _gameMoveUci, fenBefore, attempt) {
       // Flash the wrong move briefly, then restore position for retry
       const from = uci.slice(0, 2) as Key;
       const to   = uci.slice(2, 4) as Key;
