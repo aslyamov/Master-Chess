@@ -4,6 +4,7 @@ import type { Engine, AnalysisResult } from './engine';
 
 export interface SessionCallbacks {
   onPositionReady(fen: string, color: 'w' | 'b', moveNumber: number, plyIndex: number): void;
+  onWrongAttempt(uci: string, gameMove: string, fenBefore: string, attempt: number): void;
   onUserMoveResult(result: MoveResult, gameMoveUci: string, fenBeforeMove: string): void;
   onOpponentMoved(from: string, to: string, fen: string): void;
   onSessionDone(results: MoveResult[]): void;
@@ -19,6 +20,7 @@ export class TrainSession {
   private destroyed = false;
   private positionReadyAt = 0;
   private timers: ReturnType<typeof setTimeout>[] = [];
+  private attemptsAtCurrentPly = 0;
 
   // Pre-analysis: engine starts while user is thinking
   private preAnalysisPromise: Promise<AnalysisResult> | null = null;
@@ -41,12 +43,10 @@ export class TrainSession {
 
     this.playerSide = settings.playerColor === 'auto' ? 'w' : settings.playerColor;
 
-    // 0-based ply where user starts guessing
     const base = (settings.startMove - 1) * 2;
-    this.startPly    = this.playerSide === 'b' ? base + 1 : base;
-    this.currentPly  = this.startPly;
+    this.startPly   = this.playerSide === 'b' ? base + 1 : base;
+    this.currentPly = this.startPly;
 
-    // Replay to starting position
     this.chess = new Chess();
     for (let i = 0; i < this.currentPly; i++) {
       this.applyUci(this.chess, this.plies[i]);
@@ -54,10 +54,8 @@ export class TrainSession {
   }
 
   start(): void {
-    // If playing Black, auto-play White's move at startMove first
     if (this.playerSide === 'b' && this.currentPly < this.plies.length) {
-      const ply = this.currentPly;
-      if (ply % 2 === 0) {
+      if (this.currentPly % 2 === 0) {
         this.autoPlayOpponent();
         return;
       }
@@ -75,9 +73,7 @@ export class TrainSession {
     const color = this.chess.turn();
     const moveNumber = Math.floor(this.currentPly / 2) + 1;
 
-    // Start engine analysis immediately so it runs while the user thinks
     this.startPreAnalysis(fen);
-
     this.positionReadyAt = Date.now();
     this.cb.onPositionReady(fen, color, moveNumber, this.currentPly);
   }
@@ -85,18 +81,17 @@ export class TrainSession {
   private startPreAnalysis(fen: string): void {
     if (!this.engine.isReady) return;
     this.preAnalysisFen = fen;
-    this.preAnalysisPromise = this.engine.analyze(fen, this.settings).catch(() => ({ topMoves: [], bestMove: '' }));
+    this.preAnalysisPromise = this.engine.analyze(fen, this.settings)
+      .catch(() => ({ topMoves: [], bestMove: '' }));
   }
 
   async applyUserMove(uci: string): Promise<void> {
     if (this.destroyed) return;
 
-    const thinkingMs = this.positionReadyAt > 0 ? Date.now() - this.positionReadyAt : undefined;
     const fenBefore  = this.chess.fen();
     const gameMove   = this.plies[this.currentPly];
-    const sideToMove = this.chess.turn(); // capture BEFORE applying move
+    const sideToMove = this.chess.turn();
 
-    // Validate move is legal
     const from  = uci.slice(0, 2);
     const to    = uci.slice(2, 4);
     const promo = uci.length > 4 ? uci[4] : undefined;
@@ -105,8 +100,17 @@ export class TrainSession {
 
     const matchGame = uci === gameMove;
 
-    // Get engine analysis — use pre-analysis result if it's for this position,
-    // otherwise fall back to a fresh request
+    if (!matchGame) {
+      // Wrong attempt — undo move, keep position, let user retry
+      this.chess.undo();
+      this.attemptsAtCurrentPly++;
+      this.cb.onWrongAttempt(uci, gameMove, fenBefore, this.attemptsAtCurrentPly);
+      return;
+    }
+
+    // Correct move — collect engine analysis (likely already done)
+    const thinkingMs = this.positionReadyAt > 0 ? Date.now() - this.positionReadyAt : undefined;
+
     let engineTopMoves: string[] = [];
     let cpLoss: number | undefined;
 
@@ -120,11 +124,9 @@ export class TrainSession {
 
         const bestCp   = res.topMoves[0]?.score ?? 0;
         const userLine = res.topMoves.find((m) => m.move === uci);
-        if (userLine !== undefined) {
-          cpLoss = Math.max(0, bestCp - userLine.score);
-        } else {
-          cpLoss = Math.max(0, bestCp - (res.topMoves[res.topMoves.length - 1]?.score ?? bestCp - 100));
-        }
+        cpLoss = userLine !== undefined
+          ? Math.max(0, bestCp - userLine.score)
+          : Math.max(0, bestCp - (res.topMoves[res.topMoves.length - 1]?.score ?? bestCp - 100));
       } catch { /* engine may be busy */ }
     }
 
@@ -138,25 +140,19 @@ export class TrainSession {
       userMove:          uci,
       gameMove,
       engineTopMoves,
-      matchesGame:       matchGame,
+      matchesGame:       true,
       matchesEngineTop1: engineTopMoves[0] === uci,
       matchesEngineTop3: engineTopMoves.slice(0, 3).includes(uci),
+      attempts:          this.attemptsAtCurrentPly + 1,
       cpLoss,
       thinkingMs,
     };
 
+    this.attemptsAtCurrentPly = 0;
     this.results.push(result);
     this.currentPly++;
 
-    // If user played wrong move, revert and apply the actual game move
-    // so the internal position stays on the correct game line
-    if (!matchGame) {
-      this.chess.undo();
-      this.applyUci(this.chess, gameMove);
-    }
-
     this.cb.onUserMoveResult(result, gameMove, fenBefore);
-
     this.timers.push(setTimeout(() => this.autoPlayOpponent(), 750));
   }
 
@@ -168,22 +164,20 @@ export class TrainSession {
       return;
     }
 
-    // If it's already the user's turn, go to prompt
     if (this.chess.turn() === this.playerSide) {
       this.promptUser();
       return;
     }
 
     const opponentUci = this.plies[this.currentPly];
-    const from = opponentUci.slice(0, 2);
-    const to   = opponentUci.slice(2, 4);
+    const from  = opponentUci.slice(0, 2);
+    const to    = opponentUci.slice(2, 4);
     const promo = opponentUci.length > 4 ? opponentUci[4] : undefined;
 
     this.chess.move({ from, to, ...(promo ? { promotion: promo } : {}) });
     this.currentPly++;
 
     this.cb.onOpponentMoved(from, to, this.chess.fen());
-
     this.timers.push(setTimeout(() => this.promptUser(), 420));
   }
 

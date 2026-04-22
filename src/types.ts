@@ -27,12 +27,13 @@ export interface MoveResult {
   ply: number;
   moveNumber: number;
   side: 'w' | 'b';
-  userMove: string;
+  userMove: string;       // final (correct) move
   gameMove: string;
   engineTopMoves: string[];
   matchesGame: boolean;
   matchesEngineTop1: boolean;
   matchesEngineTop3: boolean;
+  attempts: number;       // 1 = got it first try
   cpLoss?: number;
   thinkingMs?: number;
 }

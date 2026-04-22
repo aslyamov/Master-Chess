@@ -393,54 +393,55 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       renderMoveList(game, settings, moveResultsMap, opponentPlayedPlies);
     },
 
-    onUserMoveResult(result, gameMoveUci, fenBefore) {
+    onWrongAttempt(uci, gameMoveUci, fenBefore, attempt) {
+      // Flash the wrong move briefly, then restore position for retry
+      const from = uci.slice(0, 2) as Key;
+      const to   = uci.slice(2, 4) as Key;
+      lockBoard();
+      makeMove(from, to);
+      showStatus('error', `✗ Неверно, попробуй ещё раз (попытка ${attempt})`, 0);
+
+      const capturedSession = session;
+      boardTimers.push(setTimeout(() => {
+        if (session !== capturedSession) return;
+        // Restore original position and re-enable moves
+        const chess = new Chess(fenBefore);
+        const dests = getLegalDests(chess);
+        const cgColor = chess.turn() === 'w' ? 'white' as const : 'black' as const;
+        setFen(fenBefore);
+        clearArrows();
+        setMovable(dests, cgColor, handleUserMove);
+        showStatus('info', 'Ваш ход!', 0);
+      }, 600));
+    },
+
+    onUserMoveResult(result, gameMoveUci, _fenBefore) {
       moveResultsMap.set(result.ply, result);
       lockBoard();
       btnHint.disabled = true;
 
-      // Show status
-      if (result.matchesGame) {
-        showStatus('success', '✓ Совпало с партией!', 2500);
+      // Show status with attempt count
+      const attemptsStr = result.attempts > 1 ? ` (с ${result.attempts} попытки)` : '';
+      if (result.matchesEngineTop1) {
+        showStatus('success', `✓ Совпало с партией!${attemptsStr}`, 2500);
       } else if (result.matchesEngineTop3) {
-        showStatus('info', `≈ Топ-${settings.engineMultiPv} движка`, 2500);
+        showStatus('info', `✓ Совпало с партией${attemptsStr}, ≈ Топ-${settings.engineMultiPv} движка`, 2500);
       } else {
-        showStatus('error', `✗ Другой ход`, 2500);
+        showStatus('success', `✓ Совпало с партией!${attemptsStr}`, 2500);
       }
 
-      // Show arrows: game move (green) and engine top move (blue) if different
-      const arrows: { orig: Key; dest: Key; brush: string }[] = [];
-      if (!result.matchesGame) {
-        arrows.push({ orig: gameMoveUci.slice(0, 2) as Key, dest: gameMoveUci.slice(2, 4) as Key, brush: 'green' });
-      }
+      // Show engine arrow if top move differs from game move
       if (settings.showEngineArrow && result.engineTopMoves[0] && result.engineTopMoves[0] !== gameMoveUci) {
-        arrows.push({ orig: result.engineTopMoves[0].slice(0, 2) as Key, dest: result.engineTopMoves[0].slice(2, 4) as Key, brush: 'blue' });
-      }
-      if (arrows.length) showArrows(arrows);
-
-      // If user played wrong, revert board to pre-move FEN, then play game move
-      if (!result.matchesGame) {
-        const capturedSession = session;
-        boardTimers.push(setTimeout(() => {
-          if (session !== capturedSession) return; // stale — new session started
-          setFen(fenBefore);
-          const from = gameMoveUci.slice(0, 2) as Key;
-          const to   = gameMoveUci.slice(2, 4) as Key;
-          makeMove(from, to);
-        }, 450));
+        showArrows([{ orig: result.engineTopMoves[0].slice(0, 2) as Key, dest: result.engineTopMoves[0].slice(2, 4) as Key, brush: 'blue' }]);
       }
 
       // Update inline stats
       updateProgress(
-        Array.from(moveResultsMap.values()).filter((r) => r.matchesGame).length,
+        Array.from(moveResultsMap.values()).filter((r) => r.attempts === 1).length,
         Array.from(moveResultsMap.values()).filter((r) => r.matchesEngineTop1).length,
         moveResultsMap.size,
       );
       renderMoveList(game, settings, moveResultsMap, opponentPlayedPlies);
-
-      // Update eval bar
-      if (settings.showEval && result.engineTopMoves.length > 0) {
-        // we don't have a direct score here — eval bar updated in engine callback
-      }
     },
 
     onOpponentMoved(from, to, _fen) {
@@ -632,7 +633,7 @@ function showStatus(type: 'info' | 'success' | 'error' | 'warning', text: string
 // ── Finish screen ─────────────────────────────────────────────────────────────
 function showFinishScreen(game: PgnGame, settings: TrainSettings, results: MoveResult[]): void {
   const total = results.length;
-  const matchGame    = results.filter((r) => r.matchesGame).length;
+  const matchGame    = results.filter((r) => r.attempts === 1).length;  // first try
   const matchEngine  = results.filter((r) => r.matchesEngineTop1).length;
   const matchEngine3 = results.filter((r) => r.matchesEngineTop3).length;
 
