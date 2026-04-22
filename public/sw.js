@@ -1,5 +1,5 @@
-const CACHE = 'mcg-v1';
-const PRECACHE = ['/', '/src/style.css', '/brown.png'];
+const CACHE = 'mcg-v2';
+const PRECACHE = ['/Master-Chess/', '/Master-Chess/brown.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
