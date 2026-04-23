@@ -105,6 +105,7 @@ export class TrainSession {
     // so this is usually an instant cache hit
     let engineTopMoves: string[] = [];
     let cpLoss: number | undefined;
+    let engineBestScore: number | undefined;
 
     if (this.engine.isReady) {
       try {
@@ -119,6 +120,8 @@ export class TrainSession {
         cpLoss = userLine !== undefined
           ? Math.max(0, bestCp - userLine.score)
           : Math.max(0, bestCp - (res.topMoves[res.topMoves.length - 1]?.score ?? bestCp - 100));
+        // Store engine best score from white's POV
+        engineBestScore = sideToMove === 'w' ? bestCp : -bestCp;
       } catch { /* engine may be busy */ }
     }
 
@@ -148,6 +151,7 @@ export class TrainSession {
       matchesEngineTop1,
       attempts:          this.attemptsAtCurrentPly + 1,
       cpLoss,
+      engineBestScore,
       thinkingMs,
     };
 

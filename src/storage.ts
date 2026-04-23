@@ -10,7 +10,6 @@ const DEFAULT_SETTINGS: TrainSettings = {
   startMove:       15,
   playerColor:     'auto',
   engineDepth:     16,
-  showEval:        false,
   showEngineArrow: true,
 };
 

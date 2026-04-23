@@ -34,6 +34,7 @@ export interface MoveResult {
   matchesEngineTop1: boolean;
   attempts: number;       // 1 = got it first try
   cpLoss?: number;
+  engineBestScore?: number; // centipawns from white's POV
   thinkingMs?: number;
 }
 
@@ -51,6 +52,5 @@ export interface TrainSettings {
   startMove: number;
   playerColor: 'w' | 'b' | 'auto';
   engineDepth: number;
-  showEval: boolean;
   showEngineArrow: boolean;
 }
