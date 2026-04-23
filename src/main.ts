@@ -42,10 +42,9 @@ const settingsWhiteName = $('settings-white-name');
 const settingsBlackName = $('settings-black-name');
 const settingsDepth     = $<HTMLInputElement>('settings-depth');
 const settingsArrow     = $<HTMLInputElement>('settings-arrow');
-const settingsEval      = $<HTMLInputElement>('settings-eval');
 const btnStart          = $('btn-start');
 
-const evalBarWrap  = $('eval-bar-wrap');
+const moveFeedback = $('move-feedback');
 const moveListEl   = $('move-list');
 const moveCounter  = $('move-counter');
 const progressBar  = $<HTMLProgressElement>('progress-bar');
@@ -297,7 +296,6 @@ function openSettingsModal(game: PgnGame): void {
 
   settingsDepth.value = String(s.engineDepth);
   settingsArrow.checked = s.showEngineArrow;
-  settingsEval.checked  = s.showEval;
 
   modalSettings.showModal();
 }
@@ -310,7 +308,6 @@ btnStart.addEventListener('click', () => {
     playerColor:     settingsWhiteRad.checked ? 'w' : 'b',
     engineDepth:     parseInt(settingsDepth.value),
     showEngineArrow: settingsArrow.checked,
-    showEval:        settingsEval.checked,
   };
   saveSettings(settings);
   currentSettings = settings;
@@ -367,12 +364,12 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
   youPlayAs.textContent    = settings.playerColor === 'w' ? `Белыми (${game.white})` : `Чёрными (${game.black})`;
   startMoveBadge.textContent = settings.startMove.toString();
 
-  evalBarWrap.classList.toggle('hidden', !settings.showEval);
-
   showScreen('train');
   renderMoveList(game, settings, new Map(), new Set());
   clearArrows();
   updateProgress(0, 0, 0);
+  moveFeedback.classList.add('hidden');
+  moveFeedback.innerHTML = '';
 
   session = new TrainSession(game, settings, engine, {
     onPositionReady(fen, color, _moveNumber, plyIndex) {
@@ -386,6 +383,9 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       moveCounter.textContent = `${userMoveNum} / ${session?.totalUserMoves ?? '?'}`;
       progressBar.value = ((plyIndex - (session?.startPly ?? 0)) / Math.max(1, game.uciMoves.length - (session?.startPly ?? 0))) * 100;
       showStatus('info', 'Ваш ход!', 0);
+      // Clear move feedback for new position
+      moveFeedback.classList.add('hidden');
+      moveFeedback.innerHTML = '';
       // Store current fen for hint
       btnHint.dataset['fen'] = fen;
       btnHint.dataset['ply'] = String(plyIndex);
@@ -450,6 +450,9 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
         moveResultsMap.size,
       );
       renderMoveList(game, settings, moveResultsMap, opponentPlayedPlies);
+
+      // Show move feedback cards
+      renderMoveFeedback(result, game, fenBefore);
     },
 
     onOpponentMoved(from, to, _fen) {
@@ -646,6 +649,103 @@ function showStatus(type: 'info' | 'success' | 'error' | 'warning', text: string
   if (hideMs > 0) {
     statusTimer = window.setTimeout(() => statusMsg.classList.add('hidden'), hideMs);
   }
+}
+
+// ── Move feedback cards ───────────────────────────────────────────────────────
+
+/** Convert a UCI move (e.g. "e2e4") to SAN using chess.js from a given FEN */
+function uciToSan(fen: string, uci: string): string {
+  try {
+    const c = new Chess(fen);
+    const from = uci.slice(0, 2);
+    const to = uci.slice(2, 4);
+    const promo = uci.length > 4 ? uci[4] : undefined;
+    const m = c.move({ from, to, ...(promo ? { promotion: promo } : {}) });
+    return m?.san ?? uci;
+  } catch {
+    return uci;
+  }
+}
+
+/** Format centipawn score from white's POV as "+1.23" / "−0.45" / "#3" */
+function formatScore(cp: number | undefined, mate?: number): string {
+  if (mate !== undefined) return mate > 0 ? `#${mate}` : `#${mate}`;
+  if (cp === undefined) return '';
+  const pawns = cp / 100;
+  return (pawns >= 0 ? '+' : '') + pawns.toFixed(1);
+}
+
+function renderMoveFeedback(result: MoveResult, game: PgnGame, fenBefore: string): void {
+  moveFeedback.innerHTML = '';
+
+  const gameSan = game.sanMoves[result.ply] ?? result.gameMove;
+  const engineBestUci = result.engineTopMoves[0];
+  const engineSan = engineBestUci ? uciToSan(fenBefore, engineBestUci) : '';
+  const bestScore = result.engineBestScore; // cp from white's POV
+
+  // Derive game move score: bestScore - cpLoss (adjusted for side)
+  let gameMoveScore: number | undefined;
+  if (bestScore !== undefined && result.cpLoss !== undefined) {
+    // cpLoss is always positive, score from playing side's perspective
+    // engineBestScore is from white's POV
+    if (result.side === 'w') {
+      gameMoveScore = bestScore - result.cpLoss;
+    } else {
+      gameMoveScore = bestScore + result.cpLoss;
+    }
+  } else if (result.matchesGame && result.matchesEngineTop1 && bestScore !== undefined) {
+    gameMoveScore = bestScore;
+  }
+
+  if (result.matchesGame && engineBestUci === result.gameMove) {
+    // Perfect: game move = engine best move — single card
+    const scoreStr = bestScore !== undefined ? formatScore(bestScore) : '';
+    moveFeedback.innerHTML = `
+      <div class="card bg-success/10 border border-success/30 shadow-sm">
+        <div class="card-body p-3 flex-row items-center gap-3">
+          <div class="text-2xl">✓</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-success/70 font-semibold uppercase tracking-wide">Лучший ход</div>
+            <div class="font-bold text-success text-lg font-mono">${gameSan}${scoreStr ? ` <span class="text-sm text-base-content/50 font-normal">${scoreStr}</span>` : ''}</div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    // Two cards: game move + engine best move
+    const gameScoreStr = gameMoveScore !== undefined ? formatScore(gameMoveScore) : '';
+    const engineScoreStr = bestScore !== undefined ? formatScore(bestScore) : '';
+
+    const gameIcon = result.matchesGame ? '✓' : '📋';
+    const gameColor = result.matchesGame ? 'success' : 'warning';
+
+    let html = `
+      <div class="card bg-${gameColor}/10 border border-${gameColor}/30 shadow-sm">
+        <div class="card-body p-3 flex-row items-center gap-3">
+          <div class="text-xl">${gameIcon}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-${gameColor}/70 font-semibold uppercase tracking-wide">Ход партии</div>
+            <div class="font-bold text-base-content text-lg font-mono">${gameSan}${gameScoreStr ? ` <span class="text-sm text-base-content/50 font-normal">${gameScoreStr}</span>` : ''}</div>
+          </div>
+        </div>
+      </div>`;
+
+    if (engineSan && engineBestUci !== result.gameMove) {
+      html += `
+      <div class="card bg-info/10 border border-info/30 shadow-sm">
+        <div class="card-body p-3 flex-row items-center gap-3">
+          <div class="text-xl">🤖</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-info/70 font-semibold uppercase tracking-wide">Лучший ход движка</div>
+            <div class="font-bold text-base-content text-lg font-mono">${engineSan}${engineScoreStr ? ` <span class="text-sm text-base-content/50 font-normal">${engineScoreStr}</span>` : ''}</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    moveFeedback.innerHTML = html;
+  }
+
+  moveFeedback.classList.remove('hidden');
 }
 
 // ── Finish screen ─────────────────────────────────────────────────────────────

@@ -3,6 +3,8 @@ dist/
 tsconfig.tsbuildinfo
 *.local
 .DS_Store
+.vscode/
+ROADMAP.md
 # Unused/oversized Stockfish builds
 public/stockfish.wasm
 public/stockfish.js

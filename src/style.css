@@ -51,11 +51,6 @@ cg-wrap, cg-board {
   background-color: hsl(var(--b1) / 0.5);
 }
 
-/* ── Eval bar ────────────────────────────────────────────────────────────── */
-#eval-bar-wrap {
-  min-width: 1rem;
-}
-
 /* ── Coordinates (Lichess style) ─────────────────────────────────────────── */
 .cg-wrap coords {
   font-weight: bold !important;

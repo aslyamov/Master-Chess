@@ -172,6 +172,9 @@
             <span id="status-text"></span>
           </div>
 
+          <!-- Move feedback cards -->
+          <div id="move-feedback" class="hidden flex flex-col gap-2"></div>
+
           <!-- Review navigation (visible only during error review) -->
           <div id="review-controls" class="hidden card bg-base-200 shadow-sm">
             <div class="card-body p-3 gap-2">
@@ -336,10 +339,6 @@
           <label class="flex items-center justify-between p-3 rounded-xl bg-base-300 cursor-pointer">
             <span class="font-medium text-sm">Показывать стрелку движка</span>
             <input id="settings-arrow" type="checkbox" class="toggle toggle-primary" checked />
-          </label>
-          <label class="flex items-center justify-between p-3 rounded-xl bg-base-300 cursor-pointer">
-            <span class="font-medium text-sm">Показывать оценку позиции</span>
-            <input id="settings-eval" type="checkbox" class="toggle toggle-primary" />
           </label>
         </div>
 
