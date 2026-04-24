@@ -107,7 +107,7 @@
         </div>
 
         <!-- Sidebar (right) -->
-        <div class="flex flex-col gap-3 w-full lg:w-64 shrink-0 order-3">
+        <div class="flex flex-col gap-3 w-full lg:w-64 shrink-0 order-3 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
 
           <!-- Game info -->
           <div class="card bg-base-200 shadow-sm">
@@ -168,19 +168,26 @@
                 <span class="text-base-content/50">Среднее попыток</span>
                 <span id="stat-avg-attempts" class="font-bold text-base-content/70">—</span>
               </div>
+              <div class="flex justify-between text-xs">
+                <span class="text-base-content/50">Общее время</span>
+                <span id="stat-total-time" class="font-bold text-base-content/70">—</span>
+              </div>
             </div>
           </div>
 
-          <!-- Status message -->
-          <div id="status-msg" class="alert hidden">
-            <span id="status-text"></span>
+          <!-- Dynamic feedback area (always visible, using placeholders) -->
+          <div class="flex flex-col gap-2 justify-start min-h-[10rem] w-full">
+            <!-- Status message -->
+            <div id="status-msg" class="alert alert-info h-16 flex items-center justify-center p-2 text-center text-sm leading-tight">
+              <span id="status-text">Ожидание...</span>
+            </div>
+
+            <!-- Move feedback -->
+            <div id="move-feedback" class="w-full"></div>
+
+            <!-- Manual advance button -->
+            <button id="btn-next-move" class="btn btn-primary btn-sm w-full" disabled>Далее →</button>
           </div>
-
-          <!-- Move feedback cards -->
-          <div id="move-feedback" class="hidden flex flex-col gap-2"></div>
-
-          <!-- Manual advance button -->
-          <button id="btn-next-move" class="btn btn-primary btn-sm w-full hidden">Далее →</button>
 
           <!-- Review navigation (visible only during error review) -->
           <div id="review-controls" class="hidden card bg-base-200 shadow-sm">
@@ -212,15 +219,15 @@
     </section>
 
     <!-- ── Finish screen ── -->
-    <section id="screen-finish" class="hidden flex flex-col items-center gap-6 w-full max-w-md text-center">
+    <section id="screen-finish" class="hidden flex flex-col items-center gap-6 w-full max-w-lg text-center">
       <div class="text-6xl">🏁</div>
       <div>
         <h2 class="text-3xl font-bold mb-1">Партия завершена!</h2>
         <p id="finish-subtitle" class="text-base-content/60 text-sm"></p>
       </div>
 
-      <!-- 3-card stats -->
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 w-full">
+      <!-- 2x2-card stats -->
+      <div class="grid grid-cols-2 gap-3 w-full">
         <!-- Партия -->
         <div class="card bg-base-200 shadow-sm">
           <div class="card-body p-4 gap-1 items-center text-center">
@@ -237,14 +244,10 @@
           <div class="card-body p-4 gap-1 items-center text-center">
             <div class="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Правильных</div>
             <div id="finish-correct" class="text-3xl font-bold text-primary">—</div>
-            <div id="finish-correct-diff" class="text-xs text-base-content/50">партия + движок</div>
-          </div>
-        </div>
-        <!-- Движок -->
-        <div class="card bg-base-200 shadow-sm">
-          <div class="card-body p-4 gap-1 items-center text-center">
-            <div class="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Движок</div>
-            <div id="finish-match-engine" class="text-3xl font-bold text-info">—</div>
+            <div id="finish-correct-diff" class="text-xs text-base-content/50">с учётом попыток</div>
+            <div class="divider my-0 opacity-20"></div>
+            <div class="text-xs text-base-content/50">Топ движка</div>
+            <div id="finish-match-engine" class="text-xl font-bold text-info">—</div>
             <div id="finish-match-engine-diff" class="text-xs text-base-content/50">лучших ходов</div>
           </div>
         </div>
@@ -257,6 +260,14 @@
             <div class="divider my-0 opacity-20"></div>
             <div class="text-xs text-base-content/50">Среднее попыток</div>
             <div id="finish-avg-attempts" class="text-xl font-bold text-base-content/60">—</div>
+          </div>
+        </div>
+        <!-- Общее время -->
+        <div class="card bg-base-200 shadow-sm">
+          <div class="card-body p-4 gap-1 items-center text-center">
+            <div class="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Общее время</div>
+            <div id="finish-total-time" class="text-3xl font-bold text-base-content/70">—</div>
+            <div class="text-xs text-base-content/50">на всю партию</div>
           </div>
         </div>
       </div>

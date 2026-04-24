@@ -78,6 +78,7 @@ const finishAvgTime     = $('finish-avg-time');
 const finishAvgAttempts = $('finish-avg-attempts');
 const finishCorrect     = $('finish-correct');
 const finishCorrectDiff = $('finish-correct-diff');
+const finishTotalTime   = $('finish-total-time');
 const btnRetry        = $('btn-retry');
 const btnReviewErrors = $('btn-review-errors');
 const btnNewGame      = $('btn-new-game');
@@ -374,8 +375,18 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
   renderMoveList(game, settings, new Map(), new Set());
   clearArrows();
   updateProgress(0, 0, 0);
-  moveFeedback.classList.add('hidden');
-  moveFeedback.innerHTML = '';
+  moveFeedback.innerHTML = `
+        <div class="grid grid-cols-2 gap-2 w-full opacity-50 grayscale">
+          <div class="flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 border-base-content/20 bg-base-200 shadow-sm text-center">
+            <div class="text-[9px] uppercase font-bold opacity-70 tracking-widest mb-0.5">Партия</div>
+            <div class="font-mono text-lg font-bold leading-tight">...</div>
+          </div>
+          <div class="flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 border-base-content/20 bg-base-200 shadow-sm text-center">
+            <div class="text-[9px] uppercase font-bold opacity-70 tracking-widest mb-0.5">Движок</div>
+            <div class="font-mono text-lg font-bold leading-tight">...</div>
+          </div>
+        </div>`;
+  btnNextMove.disabled = true;
 
   session = new TrainSession(game, settings, engine, {
     onPositionReady(fen, color, _moveNumber, plyIndex) {
@@ -388,11 +399,22 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       const userMoveNum = Math.floor((plyIndex - (session?.startPly ?? 0)) / 2) + 1;
       moveCounter.textContent = `${userMoveNum} / ${session?.totalUserMoves ?? '?'}`;
       progressBar.value = ((plyIndex - (session?.startPly ?? 0)) / Math.max(1, game.uciMoves.length - (session?.startPly ?? 0))) * 100;
-      showStatus('info', 'Ваш ход!', 0);
-      // Clear move feedback for new position
-      moveFeedback.classList.add('hidden');
-      moveFeedback.innerHTML = '';
-      btnNextMove.classList.add('hidden');
+      showStatus('info', 'Ваш ход!');
+      // Clear move feedback for new position (placeholder state)
+      moveFeedback.innerHTML = `
+        <div class="grid grid-cols-2 gap-2 w-full opacity-50 grayscale">
+          <div class="flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 border-base-content/20 bg-base-200 shadow-sm text-center h-[4.5rem]">
+            <div class="text-[9px] uppercase font-bold opacity-70 tracking-widest mb-0.5">Партия</div>
+            <div class="font-mono text-lg font-bold leading-tight">...</div>
+            <div class="text-[10px] opacity-0">-</div>
+          </div>
+          <div class="flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 border-base-content/20 bg-base-200 shadow-sm text-center h-[4.5rem]">
+            <div class="text-[9px] uppercase font-bold opacity-70 tracking-widest mb-0.5">Движок</div>
+            <div class="font-mono text-lg font-bold leading-tight">...</div>
+            <div class="text-[10px] opacity-0">-</div>
+          </div>
+        </div>`;
+      btnNextMove.disabled = true;
       // Store current fen for hint
       btnHint.dataset['fen'] = fen;
       btnHint.dataset['ply'] = String(plyIndex);
@@ -405,7 +427,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       const to   = uci.slice(2, 4) as Key;
       lockBoard();
       makeMove(from, to);
-      showStatus('error', `✗ Неверно, попробуй ещё раз (попытка ${attempt})`, 0);
+      showStatus('error', `✗ Неверно, попробуй ещё раз (попытка ${attempt})`);
 
       const capturedSession = session;
       boardTimers.push(setTimeout(() => {
@@ -417,7 +439,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
         setFen(fenBefore);
         clearArrows();
         setMovable(dests, cgColor, handleUserMove);
-        showStatus('info', 'Ваш ход!', 0);
+        showStatus('info', 'Ваш ход!');
       }, 600));
     },
 
@@ -429,9 +451,9 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       // Show status with attempt count
       const attemptsStr = result.attempts > 1 ? ` (с ${result.attempts} попытки)` : '';
       if (result.matchesGame) {
-        showStatus('success', `✓ Совпало с партией!${attemptsStr}`, 2500);
+        showStatus('success', `✓ Ход партии${attemptsStr}`);
       } else {
-        showStatus('info', `≈ Лучший ход движка${attemptsStr} (в партии: ${result.gameMove})`, 3000);
+        showStatus('info', `≈ Лучший ход движка${attemptsStr}`);
       }
 
       // If user played engine move ≠ game move: animate game move on board
@@ -463,7 +485,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
 
       // In manual mode, show the "Next" button
       if (!settings.autoAdvance) {
-        btnNextMove.classList.remove('hidden');
+        btnNextMove.disabled = false;
       }
     },
 
@@ -506,14 +528,14 @@ btnHint.addEventListener('click', () => {
 
 btnNextMove.addEventListener('click', () => {
   if (!session) return;
-  btnNextMove.classList.add('hidden');
+  btnNextMove.disabled = true;
   session.continueToNext();
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'f' || e.key === 'F') flipBoard();
   if ((e.key === 'h' || e.key === 'H') && !btnHint.disabled) btnHint.click();
-  if ((e.key === ' ' || e.key === 'Enter') && !btnNextMove.classList.contains('hidden')) {
+  if ((e.key === ' ' || e.key === 'Enter') && !btnNextMove.disabled) {
     e.preventDefault();
     btnNextMove.click();
   }
@@ -635,6 +657,26 @@ const statAvgTime     = $('stat-avg-time');
 const statFirstTry    = $('stat-first-try');
 const statAvgAttempts = $('stat-avg-attempts');
 const statCorrect     = $('stat-correct');
+const statTotalTime   = $('stat-total-time');
+
+/** Format milliseconds as "Xм Yс" or "Xс" */
+function formatTotalTime(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}с`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}м ${sec}с`;
+}
+
+/** Weighted correct %: each correct move scores 1/attempts, then / total × 100 */
+function calcWeightedCorrect(results: MoveResult[]): number {
+  if (results.length === 0) return 0;
+  const score = results.reduce((sum, r) => {
+    if (r.matchesGame || r.matchesEngineTop1) return sum + (1 / r.attempts);
+    return sum;
+  }, 0);
+  return Math.round((score / results.length) * 100);
+}
 
 function updateProgress(matchGame: number, matchEngine: number, total: number): void {
   if (total === 0) {
@@ -644,6 +686,7 @@ function updateProgress(matchGame: number, matchEngine: number, total: number): 
     statCorrect.textContent      = '—';
     statAvgTime.textContent      = '—';
     statAvgAttempts.textContent  = '—';
+    statTotalTime.textContent    = '—';
     return;
   }
   const results = Array.from(moveResultsMap.values());
@@ -652,30 +695,23 @@ function updateProgress(matchGame: number, matchEngine: number, total: number): 
   statMatchGame.textContent   = `${Math.round((matchGame / total) * 100)}%`;
   statFirstTry.textContent    = `${Math.round((firstTry / total) * 100)}%`;
   statMatchEngine.textContent = `${Math.round((matchEngine / total) * 100)}%`;
-
-  const correct = results.filter(r => r.matchesGame || r.matchesEngineTop1).length;
-  statCorrect.textContent = `${Math.round((correct / total) * 100)}%`;
+  statCorrect.textContent     = `${calcWeightedCorrect(results)}%`;
 
   const times = results.map(r => r.thinkingMs).filter((t): t is number => t !== undefined);
   if (times.length > 0) {
-    const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length / 1000);
+    const totalMs = times.reduce((a, b) => a + b, 0);
+    const avg = Math.round(totalMs / times.length / 1000);
     statAvgTime.textContent = `${avg}с`;
+    statTotalTime.textContent = formatTotalTime(totalMs);
   }
 
   const avgAttempts = results.reduce((s, r) => s + r.attempts, 0) / results.length;
   statAvgAttempts.textContent = avgAttempts.toFixed(1);
 }
 
-let statusTimer = 0;
-
-function showStatus(type: 'info' | 'success' | 'error' | 'warning', text: string, hideMs: number): void {
-  clearTimeout(statusTimer);
-  statusMsg.className = `alert alert-${type}`;
+function showStatus(type: 'info' | 'success' | 'error' | 'warning', text: string): void {
+  statusMsg.className = `alert alert-${type} h-16 flex items-center justify-center p-2 text-center text-sm leading-tight`;
   statusText.textContent = text;
-  statusMsg.classList.remove('hidden');
-  if (hideMs > 0) {
-    statusTimer = window.setTimeout(() => statusMsg.classList.add('hidden'), hideMs);
-  }
 }
 
 // ── Move feedback cards ───────────────────────────────────────────────────────
@@ -713,8 +749,6 @@ function renderMoveFeedback(result: MoveResult, game: PgnGame, fenBefore: string
   // Derive game move score: bestScore - cpLoss (adjusted for side)
   let gameMoveScore: number | undefined;
   if (bestScore !== undefined && result.cpLoss !== undefined) {
-    // cpLoss is always positive, score from playing side's perspective
-    // engineBestScore is from white's POV
     if (result.side === 'w') {
       gameMoveScore = bestScore - result.cpLoss;
     } else {
@@ -724,55 +758,32 @@ function renderMoveFeedback(result: MoveResult, game: PgnGame, fenBefore: string
     gameMoveScore = bestScore;
   }
 
-  if (result.matchesGame && engineBestUci === result.gameMove) {
-    // Perfect: game move = engine best move — single card
-    const scoreStr = bestScore !== undefined ? formatScore(bestScore) : '';
-    moveFeedback.innerHTML = `
-      <div class="card bg-success/10 border border-success/30 shadow-sm">
-        <div class="card-body p-3 flex-row items-center gap-3">
-          <div class="text-2xl">✓</div>
-          <div class="flex-1 min-w-0">
-            <div class="text-xs text-success/70 font-semibold uppercase tracking-wide">Лучший ход</div>
-            <div class="font-bold text-success text-lg font-mono">${gameSan}${scoreStr ? ` <span class="text-sm text-base-content/50 font-normal">${scoreStr}</span>` : ''}</div>
-          </div>
-        </div>
-      </div>`;
-  } else {
-    // Two cards: game move + engine best move
-    const gameScoreStr = gameMoveScore !== undefined ? formatScore(gameMoveScore) : '';
-    const engineScoreStr = bestScore !== undefined ? formatScore(bestScore) : '';
+  const gameScoreStr = gameMoveScore !== undefined ? formatScore(gameMoveScore) : '';
+  const engineScoreStr = bestScore !== undefined ? formatScore(bestScore) : '';
+  const sameMove = engineBestUci === result.gameMove;
 
-    const gameIcon = result.matchesGame ? '✓' : '📋';
-    const gameColor = result.matchesGame ? 'success' : 'warning';
+  const guessedGame = result.matchesGame;
+  const guessedEngine = result.matchesEngineTop1;
 
-    let html = `
-      <div class="card bg-${gameColor}/10 border border-${gameColor}/30 shadow-sm">
-        <div class="card-body p-3 flex-row items-center gap-3">
-          <div class="text-xl">${gameIcon}</div>
-          <div class="flex-1 min-w-0">
-            <div class="text-xs text-${gameColor}/70 font-semibold uppercase tracking-wide">Ход партии</div>
-            <div class="font-bold text-base-content text-lg font-mono">${gameSan}${gameScoreStr ? ` <span class="text-sm text-base-content/50 font-normal">${gameScoreStr}</span>` : ''}</div>
-          </div>
-        </div>
-      </div>`;
+  const gameBg = guessedGame ? 'bg-success text-success-content border-success' : 'bg-success/10 text-success border-success/30';
+  const engineBg = guessedEngine ? 'bg-info text-info-content border-info' : 'bg-info/10 text-info border-info/30';
 
-    if (engineSan && engineBestUci !== result.gameMove) {
-      html += `
-      <div class="card bg-info/10 border border-info/30 shadow-sm">
-        <div class="card-body p-3 flex-row items-center gap-3">
-          <div class="text-xl">🤖</div>
-          <div class="flex-1 min-w-0">
-            <div class="text-xs text-info/70 font-semibold uppercase tracking-wide">Лучший ход движка</div>
-            <div class="font-bold text-base-content text-lg font-mono">${engineSan}${engineScoreStr ? ` <span class="text-sm text-base-content/50 font-normal">${engineScoreStr}</span>` : ''}</div>
-          </div>
-        </div>
-      </div>`;
-    }
+  const displayEngineSan = sameMove ? gameSan : (engineSan || '—');
 
-    moveFeedback.innerHTML = html;
-  }
+  moveFeedback.innerHTML = `
+    <div class="grid grid-cols-2 gap-2 w-full">
+      <div class="flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 ${gameBg} shadow-sm text-center transition-colors duration-200 h-[4.5rem]">
+        <div class="text-[9px] uppercase font-bold opacity-70 tracking-widest mb-0.5">Партия</div>
+        <div class="font-mono text-lg font-bold leading-tight">${gameSan}</div>
+        <div class="text-[10px] opacity-70">${gameScoreStr || '&nbsp;'}</div>
+      </div>
+      <div class="flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 ${engineBg} shadow-sm text-center transition-colors duration-200 h-[4.5rem]">
+        <div class="text-[9px] uppercase font-bold opacity-70 tracking-widest mb-0.5">Движок</div>
+        <div class="font-mono text-lg font-bold leading-tight">${displayEngineSan}</div>
+        <div class="text-[10px] opacity-70">${engineScoreStr || '&nbsp;'}</div>
+      </div>
+    </div>`;
 
-  moveFeedback.classList.remove('hidden');
 }
 
 // ── Finish screen ─────────────────────────────────────────────────────────────
@@ -809,21 +820,24 @@ function showFinishScreen(game: PgnGame, settings: TrainSettings, results: MoveR
   finishMatchEngine.textContent    = pct(matchEngine);
   finishMatchEngineDiff.textContent = `${matchEngine} из ${total} ходов`;
 
-  // Правильных card
-  const correct = results.filter(r => r.matchesGame || r.matchesEngineTop1).length;
-  finishCorrect.textContent = pct(correct);
-  finishCorrectDiff.textContent = `${correct} из ${total} ходов`;
+  // Правильных card (weighted by attempts)
+  finishCorrect.textContent = `${calcWeightedCorrect(results)}%`;
+  finishCorrectDiff.textContent = `с учётом попыток`;
 
   // Скорость card
   const times = results.map(r => r.thinkingMs).filter((t): t is number => t !== undefined);
+  const totalMs = times.length > 0 ? times.reduce((a, b) => a + b, 0) : 0;
   if (times.length > 0) {
-    const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length / 1000);
+    const avg = Math.round(totalMs / times.length / 1000);
     finishAvgTime.textContent = `${avg}с`;
   } else {
     finishAvgTime.textContent = '—';
   }
   const avgAttempts = total > 0 ? (results.reduce((s, r) => s + r.attempts, 0) / total).toFixed(1) : '—';
   finishAvgAttempts.textContent = avgAttempts;
+
+  // Общее время card
+  finishTotalTime.textContent = totalMs > 0 ? formatTotalTime(totalMs) : '—';
 
   // Chart: attempts per move
   const canvas = document.getElementById('finish-chart') as HTMLCanvasElement | null;
@@ -952,7 +966,7 @@ function showReviewMove(): void {
   reviewCounter.textContent = `${reviewIdx + 1} / ${reviewMoves.length}`;
   btnReviewPrev.disabled = reviewIdx === 0;
   btnReviewNext.textContent = reviewIdx === reviewMoves.length - 1 ? '✓ Готово' : 'След →';
-  showStatus('warning', `Ход ${r.moveNumber}: ваш ${r.userMove}, в партии ${r.gameMove}`, 0);
+  showStatus('warning', `Ход ${r.moveNumber}: ваш ${r.userMove}, в партии ${r.gameMove}`);
 }
 
 // ── Stats screen ──────────────────────────────────────────────────────────────
