@@ -42,9 +42,11 @@ const settingsWhiteName = $('settings-white-name');
 const settingsBlackName = $('settings-black-name');
 const settingsDepth     = $<HTMLInputElement>('settings-depth');
 const settingsArrow     = $<HTMLInputElement>('settings-arrow');
+const settingsManual    = $<HTMLInputElement>('settings-manual');
 const btnStart          = $('btn-start');
 
 const moveFeedback = $('move-feedback');
+const btnNextMove  = $<HTMLButtonElement>('btn-next-move');
 const moveListEl   = $('move-list');
 const moveCounter  = $('move-counter');
 const progressBar  = $<HTMLProgressElement>('progress-bar');
@@ -74,6 +76,8 @@ const finishMatchEngineDiff  = $('finish-match-engine-diff');
 const finishFirstTry    = $('finish-first-try');
 const finishAvgTime     = $('finish-avg-time');
 const finishAvgAttempts = $('finish-avg-attempts');
+const finishCorrect     = $('finish-correct');
+const finishCorrectDiff = $('finish-correct-diff');
 const btnRetry        = $('btn-retry');
 const btnReviewErrors = $('btn-review-errors');
 const btnNewGame      = $('btn-new-game');
@@ -296,6 +300,7 @@ function openSettingsModal(game: PgnGame): void {
 
   settingsDepth.value = String(s.engineDepth);
   settingsArrow.checked = s.showEngineArrow;
+  settingsManual.checked = !s.autoAdvance;
 
   modalSettings.showModal();
 }
@@ -308,6 +313,7 @@ btnStart.addEventListener('click', () => {
     playerColor:     settingsWhiteRad.checked ? 'w' : 'b',
     engineDepth:     parseInt(settingsDepth.value),
     showEngineArrow: settingsArrow.checked,
+    autoAdvance:     !settingsManual.checked,
   };
   saveSettings(settings);
   currentSettings = settings;
@@ -386,6 +392,7 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
       // Clear move feedback for new position
       moveFeedback.classList.add('hidden');
       moveFeedback.innerHTML = '';
+      btnNextMove.classList.add('hidden');
       // Store current fen for hint
       btnHint.dataset['fen'] = fen;
       btnHint.dataset['ply'] = String(plyIndex);
@@ -453,6 +460,11 @@ async function startSession(game: PgnGame, settings: TrainSettings): Promise<voi
 
       // Show move feedback cards
       renderMoveFeedback(result, game, fenBefore);
+
+      // In manual mode, show the "Next" button
+      if (!settings.autoAdvance) {
+        btnNextMove.classList.remove('hidden');
+      }
     },
 
     onOpponentMoved(from, to, _fen) {
@@ -492,9 +504,19 @@ btnHint.addEventListener('click', () => {
   showArrows([{ orig: gameMove.slice(0, 2) as Key, dest: gameMove.slice(2, 4) as Key, brush: 'yellow' }]);
 });
 
+btnNextMove.addEventListener('click', () => {
+  if (!session) return;
+  btnNextMove.classList.add('hidden');
+  session.continueToNext();
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'f' || e.key === 'F') flipBoard();
   if ((e.key === 'h' || e.key === 'H') && !btnHint.disabled) btnHint.click();
+  if ((e.key === ' ' || e.key === 'Enter') && !btnNextMove.classList.contains('hidden')) {
+    e.preventDefault();
+    btnNextMove.click();
+  }
   if (isReviewMode) {
     if (e.key === 'ArrowLeft')  btnReviewPrev.click();
     if (e.key === 'ArrowRight') btnReviewNext.click();
@@ -612,12 +634,14 @@ function moveCell(
 const statAvgTime     = $('stat-avg-time');
 const statFirstTry    = $('stat-first-try');
 const statAvgAttempts = $('stat-avg-attempts');
+const statCorrect     = $('stat-correct');
 
 function updateProgress(matchGame: number, matchEngine: number, total: number): void {
   if (total === 0) {
     statMatchGame.textContent    = '—';
     statFirstTry.textContent     = '—';
     statMatchEngine.textContent  = '—';
+    statCorrect.textContent      = '—';
     statAvgTime.textContent      = '—';
     statAvgAttempts.textContent  = '—';
     return;
@@ -628,6 +652,9 @@ function updateProgress(matchGame: number, matchEngine: number, total: number): 
   statMatchGame.textContent   = `${Math.round((matchGame / total) * 100)}%`;
   statFirstTry.textContent    = `${Math.round((firstTry / total) * 100)}%`;
   statMatchEngine.textContent = `${Math.round((matchEngine / total) * 100)}%`;
+
+  const correct = results.filter(r => r.matchesGame || r.matchesEngineTop1).length;
+  statCorrect.textContent = `${Math.round((correct / total) * 100)}%`;
 
   const times = results.map(r => r.thinkingMs).filter((t): t is number => t !== undefined);
   if (times.length > 0) {
@@ -781,6 +808,11 @@ function showFinishScreen(game: PgnGame, settings: TrainSettings, results: MoveR
   // Движок card
   finishMatchEngine.textContent    = pct(matchEngine);
   finishMatchEngineDiff.textContent = `${matchEngine} из ${total} ходов`;
+
+  // Правильных card
+  const correct = results.filter(r => r.matchesGame || r.matchesEngineTop1).length;
+  finishCorrect.textContent = pct(correct);
+  finishCorrectDiff.textContent = `${correct} из ${total} ходов`;
 
   // Скорость card
   const times = results.map(r => r.thinkingMs).filter((t): t is number => t !== undefined);

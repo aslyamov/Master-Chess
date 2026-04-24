@@ -166,7 +166,17 @@ export class TrainSession {
     }
 
     this.cb.onUserMoveResult(result, gameMove, fenBefore);
-    this.timers.push(setTimeout(() => this.autoPlayOpponent(), 750));
+
+    if (this.settings.autoAdvance) {
+      this.timers.push(setTimeout(() => this.autoPlayOpponent(), 750));
+    }
+    // else: wait for external continueToNext() call
+  }
+
+  /** Called externally in manual mode to advance to next move */
+  continueToNext(): void {
+    if (this.destroyed) return;
+    this.autoPlayOpponent();
   }
 
   private autoPlayOpponent(): void {

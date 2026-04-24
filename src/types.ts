@@ -53,4 +53,5 @@ export interface TrainSettings {
   playerColor: 'w' | 'b' | 'auto';
   engineDepth: number;
   showEngineArrow: boolean;
+  autoAdvance: boolean;
 }

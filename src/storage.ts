@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS: TrainSettings = {
   playerColor:     'auto',
   engineDepth:     16,
   showEngineArrow: true,
+  autoAdvance:     true,
 };
 
 // ── PGNs ─────────────────────────────────────────────────────────────────────
